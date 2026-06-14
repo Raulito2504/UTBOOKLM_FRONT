@@ -1,5 +1,13 @@
-export default function Page() {
+import { AuthShell } from "@/src/components/auth/auth-shell";
+import { LoginForm } from "@/src/components/auth/login-form";
+
+export default function LoginPage() {
   return (
-    <div>app</div>
+    <AuthShell
+      title="Bienvenido de nuevo"
+      subtitle="Inicia sesión para continuar con tus documentos, flashcards y rachas de estudio."
+    >
+      <LoginForm />
+    </AuthShell>
   );
 }
