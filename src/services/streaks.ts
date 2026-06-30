@@ -4,6 +4,7 @@ import {
   getMockStreak,
   getMockStreakCalendar,
 } from "@/src/lib/mock/dashboard";
+import { delay } from "@/src/lib/utils/delay";
 import type { StreakCalendar, StreakSummary } from "@/src/types/streaks";
 
 /** GET /api/v1/streaks/me */
@@ -36,6 +37,3 @@ export async function pingStreakActivity(): Promise<void> {
   await apiClient<void>("/streaks/ping", { method: "POST" });
 }
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}

@@ -1,6 +1,7 @@
 import { apiClient } from "@/src/lib/api/client";
 import { USE_MOCK_DATA } from "@/src/lib/api/config";
 import { mockDashboardData } from "@/src/lib/mock/dashboard";
+import { delay } from "@/src/lib/utils/delay";
 import type { DashboardData } from "@/src/types/dashboard";
 import type { UserProfile } from "@/src/types/auth";
 import { getStreakCalendar, getStreakSummary } from "@/src/services/streaks";
@@ -28,6 +29,3 @@ export async function getDashboardData(): Promise<DashboardData> {
   return { user, streak, calendar, ...dashboard };
 }
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
