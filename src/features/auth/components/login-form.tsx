@@ -7,6 +7,13 @@ import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { API_BASE_URL } from "@/src/lib/api/config";
 import { useAuth } from "@/src/features/auth/auth-context";
+import { ApiError } from "@/src/lib/api/client";
+
+const loginErrors: Record<string, string> = {
+  invalid_credentials: "Correo o contraseña incorrectos.",
+  auth_disabled: "La autenticación no está activa en el backend.",
+  validation_error: "Revisa el correo y la contraseña.",
+};
 
 export function LoginForm() {
   const router = useRouter();
@@ -26,7 +33,9 @@ export function LoginForm() {
     try {
       await login({ email, password }, form.get("remember") === "on");
       router.replace("/dashboard");
-    } catch { setError("No fue posible iniciar sesión. Verifica tus credenciales e intenta de nuevo."); }
+    } catch (cause) {
+      setError(cause instanceof ApiError ? loginErrors[cause.errorCode] ?? "No fue posible iniciar sesión. Intenta de nuevo." : "No fue posible iniciar sesión. Intenta de nuevo.");
+    }
     finally { setIsSubmitting(false); }
   }
 

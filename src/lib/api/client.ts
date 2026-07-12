@@ -67,6 +67,7 @@ export async function apiClient<T>(
     } catch {
       clearSession();
       if (typeof window !== "undefined") window.location.assign("/login");
+      throw new ApiError(401, "session_expired", "La sesión expiró");
     }
   }
 

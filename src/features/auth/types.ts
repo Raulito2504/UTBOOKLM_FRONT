@@ -26,6 +26,8 @@ export interface RegisterRequest {
 export interface RefreshRequest { refresh_token: string }
 export interface ForgotPasswordRequest { email: string }
 export interface ResetPasswordRequest { reset_token: string; new_password: string }
+export interface ForgotPasswordResponse { message: string; reset_token: string | null }
+export interface MessageResponse { message: string }
 
 export interface ApiError {
   error_code: string;
