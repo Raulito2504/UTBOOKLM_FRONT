@@ -1,11 +1,14 @@
+"use client";
 import Link from "next/link";
 import { mainNavItems } from "@/src/lib/navigation";
+import { useAuth } from "@/src/features/auth/auth-context";
 
 interface SidebarProps {
   currentPath: string;
 }
 
 export function Sidebar({ currentPath }: SidebarProps) {
+  const { user, logout } = useAuth();
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card lg:flex">
       <div className="flex h-16 items-center gap-3 border-b border-border px-6">
@@ -44,6 +47,8 @@ export function Sidebar({ currentPath }: SidebarProps) {
       </nav>
 
       <div className="border-t border-border p-4">
+        <p className="truncate text-sm font-medium text-foreground">{user?.name}</p>
+        <button type="button" onClick={() => void logout()} className="mt-2 text-sm font-medium text-primary hover:text-primary-hover">Cerrar sesión</button>
         <p className="text-xs text-muted">
           Proyecto académico · Cuatrimestre 2026
         </p>
