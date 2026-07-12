@@ -25,7 +25,7 @@ export function RegisterForm() {
     setIsSubmitting(true); setError("");
     try {
       await register({ name: String(form.get("name") ?? "").trim(), organization_name: String(form.get("organization_name") ?? "").trim(), email: String(form.get("email") ?? "").trim(), password });
-      router.replace("/dashboard");
+      router.replace("/notebooks");
     } catch (cause) {
       setError(cause instanceof ApiError && cause.errorCode === "email_already_registered" ? "Ya existe una cuenta con ese correo electrónico." : "Revisa los datos e intenta crear tu cuenta nuevamente.");
     } finally { setIsSubmitting(false); }
