@@ -22,7 +22,7 @@ export default function GoogleCallbackPage() {
     window.history.replaceState(null, "", "/auth/callback");
     if (errorCode) { window.setTimeout(() => setError(oauthErrors[errorCode] ?? "No fue posible iniciar sesión con Google."), 0); return; }
     if (!accessToken || !refreshToken || !tokenType) { window.setTimeout(() => setError("La respuesta de autenticación está incompleta."), 0); return; }
-    acceptOAuthSession(accessToken, refreshToken, tokenType).then(() => router.replace("/dashboard")).catch(() => setError("No fue posible completar el inicio de sesión con Google."));
+    acceptOAuthSession(accessToken, refreshToken, tokenType).then(() => router.replace("/notebooks")).catch(() => setError("No fue posible completar el inicio de sesión con Google."));
   }, [acceptOAuthSession, router]);
   return <main className="flex min-h-screen items-center justify-center bg-background px-6"><div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">{error ? <><p className="text-sm text-error" role="alert">{error}</p><Link href="/login" className="mt-5 inline-block text-sm font-semibold text-primary">Volver al inicio de sesión</Link></> : <p className="text-sm text-muted" role="status">Completando inicio de sesión…</p>}</div></main>;
 }

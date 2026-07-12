@@ -20,7 +20,7 @@ export function PrivateRoute({ children }: { children: React.ReactNode }) {
 export function GuestRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
-  useEffect(() => { if (!isLoading && isAuthenticated) router.replace("/dashboard"); }, [isAuthenticated, isLoading, router]);
+  useEffect(() => { if (!isLoading && isAuthenticated) router.replace("/notebooks"); }, [isAuthenticated, isLoading, router]);
   if (isLoading || isAuthenticated) return <Loading />;
   return children;
 }
