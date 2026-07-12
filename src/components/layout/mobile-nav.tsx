@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { mainNavItems } from "@/src/lib/navigation";
+import { useAuth } from "@/src/features/auth/auth-context";
 
 interface MobileNavProps {
   currentPath: string;
@@ -10,6 +11,7 @@ interface MobileNavProps {
 
 export function MobileNav({ currentPath }: MobileNavProps) {
   const [open, setOpen] = useState(false);
+  const { logout } = useAuth();
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-card px-4 lg:hidden">
@@ -53,6 +55,7 @@ export function MobileNav({ currentPath }: MobileNavProps) {
               );
             })}
           </ul>
+          <button type="button" onClick={() => void logout()} className="mt-2 w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium text-primary">Cerrar sesión</button>
         </nav>
       )}
     </header>

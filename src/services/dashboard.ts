@@ -3,7 +3,7 @@ import { USE_MOCK_DATA } from "@/src/lib/api/config";
 import { mockDashboardData } from "@/src/lib/mock/dashboard";
 import { delay } from "@/src/lib/utils/delay";
 import type { DashboardData } from "@/src/types/dashboard";
-import type { UserProfile } from "@/src/types/auth";
+import type { UserProfile } from "@/src/features/auth/hooks/auth";
 import { getStreakCalendar, getStreakSummary } from "@/src/services/streaks";
 
 /**

@@ -1,5 +1,5 @@
 import type { StreakCalendar, StreakSummary } from "@/src/types/streaks";
-import type { UserProfile } from "@/src/types/auth";
+import type { UserProfile } from "@/src/features/auth/hooks/auth";
 
 export interface UsageMetrics {
   documents_uploaded: number;
