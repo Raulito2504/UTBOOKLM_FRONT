@@ -1,5 +1,5 @@
 import { apiClient } from "@/src/lib/api/client";
-import type { AuthResponse, ForgotPasswordRequest, LoginRequest, RegisterRequest, ResetPasswordRequest, User } from "./types";
+import type { AuthResponse, ForgotPasswordRequest, LoginRequest, RegisterRequest, ResetPasswordRequest, User } from "../types";
 
 export const authService = {
   login: (body: LoginRequest) => apiClient<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(body), auth: false }),

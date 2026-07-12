@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { authService } from "./service";
+import { authService } from "./api/service";
 import { clearSession, getAccessToken, getRefreshToken, getStoredUser, saveSession, saveUser } from "./session";
 import type { LoginRequest, RegisterRequest, User } from "./types";
 

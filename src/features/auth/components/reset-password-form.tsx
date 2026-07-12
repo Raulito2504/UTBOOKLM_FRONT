@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
-import { authService } from "@/src/features/auth/service";
+import { authService } from "@/src/features/auth/api/service";
 import { ApiError } from "@/src/lib/api/client";
 
 const tokenErrors: Record<string, string> = {

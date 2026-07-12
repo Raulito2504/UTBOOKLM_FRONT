@@ -1,6 +1,6 @@
 import type { DashboardData } from "@/src/types/dashboard";
 import type { StreakCalendar, StreakSummary } from "@/src/types/streaks";
-import type { UserProfile } from "@/src/types/auth";
+import type { UserProfile } from "@/src/features/auth/hooks/auth";
 
 const mockUser: UserProfile = {
   id: "usr_001",

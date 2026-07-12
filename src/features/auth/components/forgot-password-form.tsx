@@ -3,7 +3,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { Input } from "@/src/components/ui/input";
 import { Button } from "@/src/components/ui/button";
-import { authService } from "@/src/features/auth/service";
+import { authService } from "@/src/features/auth/api/service";
 
 const genericMessage = "Si el correo pertenece a una cuenta, recibirás instrucciones para restablecer tu contraseña.";
 export function ForgotPasswordForm() {
