@@ -1,5 +1,5 @@
-import { FlashcardsView } from "@/src/components/flashcards/flashcards-view";
+import { StudyPracticeView } from "@/src/features/study-practice/components/study-practice-view";
 
 export default function FlashcardsPage() {
-  return <FlashcardsView />;
+  return <StudyPracticeView />;
 }
