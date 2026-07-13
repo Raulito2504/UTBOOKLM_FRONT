@@ -36,6 +36,9 @@ import type { ChatMessage, ChatNotebook, NotebookDocument } from "../types";
 type Status = "idle" | "loading" | "success" | "error";
 type StudioMode = "home" | "flashcards" | "quiz";
 type StudioStatus = "idle" | "generating" | "ready" | "error";
+type QuizFeedbackItem = NonNullable<
+  NonNullable<QuizAttempt["feedback"]>["items"]
+>[number];
 
 function formatHour(value: string) {
   return new Intl.DateTimeFormat("es-MX", {
@@ -418,27 +421,29 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
       ) : null}
 
       {status === "success" ? (
-        <div className="grid min-h-[calc(100vh-4rem)] grid-cols-1 gap-3 p-3 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_300px]">
-          <aside className="rounded-xl border border-white/8 bg-[#171a1d] p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">Fuentes</h2>
-              <span className="text-sm text-white/50">{sourceCount}</span>
+        <div className="grid h-[calc(100vh-4rem)] grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_300px]">
+          <aside className="flex min-h-0 flex-col rounded-xl border border-white/8 bg-[#171a1d] p-4">
+            <div className="shrink-0">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold">Fuentes</h2>
+                <span className="text-sm text-white/50">{sourceCount}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSourceDialogOpen(true)}
+                className="mt-5 h-10 w-full rounded-full border border-white/12 text-sm font-semibold text-white/85 transition-colors hover:bg-white/[0.05]"
+              >
+                + Anadir fuentes
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsSourceDialogOpen(true)}
-              className="mt-5 h-10 w-full rounded-full border border-white/12 text-sm font-semibold text-white/85 transition-colors hover:bg-white/[0.05]"
-            >
-              + Anadir fuentes
-            </button>
 
             {sourceError ? (
-              <p className="mt-4 rounded-lg border border-red-300/25 bg-red-400/10 px-3 py-2 text-xs text-red-200">
+              <p className="mt-4 shrink-0 rounded-lg border border-red-300/25 bg-red-400/10 px-3 py-2 text-xs text-red-200">
                 {sourceError}
               </p>
             ) : null}
 
-            <div className="min-h-[420px]">
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
               {sourceCount > 0 ? (
                 <div className="mt-5 space-y-3">
                   {sources.map((source) => (
@@ -485,7 +490,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
                   ))}
                 </div>
               ) : (
-                <div className="grid min-h-[420px] place-items-center text-center">
+                <div className="grid h-full min-h-80 place-items-center text-center">
                   <div className="max-w-[240px] text-sm text-white/42">
                     <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-white/35">
                       +
@@ -502,12 +507,12 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
             </div>
           </aside>
 
-          <main className="flex min-h-[78vh] flex-col rounded-xl border border-white/8 bg-[#171a1d]">
-            <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+          <main className="flex min-h-0 flex-col rounded-xl border border-white/8 bg-[#171a1d]">
+            <div className="shrink-0 flex items-center justify-between border-b border-white/8 px-4 py-3">
               <h2 className="font-semibold">Chat</h2>
               <span className="text-xs text-white/45">{sourceCount} fuentes</span>
             </div>
-            <div className="flex-1 space-y-4 overflow-auto p-5 sm:p-8">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
               {messages.length === 0 ? (
                 <div className="grid min-h-80 place-items-center text-center">
                   <div>
@@ -567,7 +572,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
               ) : null}
             </div>
 
-            <form onSubmit={submit} className="border-t border-white/8 p-4">
+            <form onSubmit={submit} className="shrink-0 border-t border-white/8 p-4">
               {error ? <p className="mb-2 text-sm text-red-300">{error}</p> : null}
               {sourceCount === 0 ? (
                 <p className="mb-2 text-xs text-white/45">
@@ -593,7 +598,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
             </form>
           </main>
 
-          <aside className="rounded-xl border border-white/8 bg-[#171a1d]">
+          <aside className="min-h-0 overflow-hidden rounded-xl border border-white/8 bg-[#171a1d]">
             {studioMode === "home" ? (
               <StudioHomePanel
                 sourceCount={sourceCount}
@@ -757,7 +762,7 @@ function StudioHomePanel({
   const hasSavedItems = savedDecks.length > 0 || savedQuizzes.length > 0;
 
   return (
-    <div className="p-4">
+    <div className="h-full overflow-y-auto p-4">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">Studio</h2>
         <span className="text-xs text-white/45">{sourceCount} fuentes</span>
@@ -925,11 +930,16 @@ function StudioQuizPanel({
 }: StudioQuizPanelProps) {
   const answerValue = question ? answers[question.id] ?? "" : "";
   const isLastQuestion = questionIndex >= questionCount - 1;
+  const currentFeedback =
+    question && attempt?.feedback?.items
+      ? attempt.feedback.items.find((item) => item.question_id === question.id) ?? null
+      : null;
+  const hasSubmitted = Boolean(attempt);
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <StudioPanelHeader onBack={onBack} title="Cuestionario" />
-      <div className="flex-1 p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.28)_transparent]">
         <h2 className="text-lg font-semibold text-white">
           {quiz?.title ?? "Generando cuestionario"}
         </h2>
@@ -956,6 +966,8 @@ function StudioQuizPanel({
             <StudioQuestionAnswer
               question={question}
               value={answerValue}
+              feedback={currentFeedback}
+              submitted={hasSubmitted}
               onChange={(value) => onAnswer(question.id, value)}
             />
             <div className="mt-6 flex items-center justify-between gap-3">
@@ -971,10 +983,14 @@ function StudioQuizPanel({
                 <button
                   type="button"
                   onClick={onSubmit}
-                  disabled={!answerValue || isSubmitting}
+                  disabled={!answerValue || isSubmitting || hasSubmitted}
                   className="rounded-full bg-[#5865ff] px-4 py-2 text-xs font-semibold text-white disabled:opacity-45"
                 >
-                  {isSubmitting ? "Enviando..." : "Enviar"}
+                  {hasSubmitted
+                    ? "Enviado"
+                    : isSubmitting
+                      ? "Enviando..."
+                      : "Enviar"}
                 </button>
               ) : (
                 <button
@@ -995,12 +1011,12 @@ function StudioQuizPanel({
         ) : null}
       </div>
 
-      <div className="border-t border-white/8 p-4">
+      <div className="shrink-0 border-t border-white/8 p-4">
         {attempt ? (
           <div className="rounded-lg border border-emerald-300/20 bg-emerald-400/10 p-3 text-sm text-emerald-100">
             <p className="font-semibold">Resultado: {attempt.score ?? 0} puntos</p>
             <p className="mt-1 text-xs text-emerald-100/70">
-              Tus respuestas quedaron guardadas.
+              Revisa las opciones marcadas en cada pregunta.
             </p>
           </div>
         ) : (
@@ -1052,9 +1068,9 @@ function StudioFlashcardsPanel({
   onReview,
 }: StudioFlashcardsPanelProps) {
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <StudioPanelHeader onBack={onBack} title="Tarjetas didacticas" />
-      <div className="flex-1 p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <h2 className="text-lg font-semibold text-white">
           {deck?.name ?? "Generando tarjetas"}
         </h2>
@@ -1159,36 +1175,60 @@ function StudioErrorState({ message }: { message: string }) {
 function StudioQuestionAnswer({
   question,
   value,
+  feedback,
+  submitted,
   onChange,
 }: {
   question: QuizQuestion;
   value: string;
+  feedback: QuizFeedbackItem | null;
+  submitted: boolean;
   onChange: (value: string) => void;
 }) {
   if (question.question_type === "multiple_choice" && question.options) {
     return (
       <div className="mt-6 space-y-3">
-        {Object.entries(question.options).map(([key, label]) => (
-          <label
-            key={key}
-            className={`flex cursor-pointer gap-3 rounded-lg border px-4 py-3 text-sm transition-colors ${
-              value === key
-                ? "border-[#5865ff] bg-[#5865ff]/15 text-white"
-                : "border-white/8 bg-[#12161b] text-white/80 hover:bg-white/[0.055]"
-            }`}
-          >
-            <input
-              type="radio"
-              name={question.id}
-              checked={value === key}
-              onChange={() => onChange(key)}
-              className="mt-1"
-            />
-            <span>
-              {key}. {label}
-            </span>
-          </label>
-        ))}
+        {Object.entries(question.options).map(([key, label]) => {
+          const state = answerState({
+            option: key,
+            value,
+            feedback,
+            submitted,
+          });
+          return (
+            <label
+              key={key}
+              className={`flex gap-3 rounded-lg border px-4 py-3 text-sm transition-colors ${answerStateClass(state)} ${
+                submitted ? "cursor-default" : "cursor-pointer"
+              }`}
+            >
+              <input
+                type="radio"
+                name={question.id}
+                checked={value === key}
+                onChange={() => onChange(key)}
+                disabled={submitted}
+                className="mt-1"
+              />
+              <span className="flex-1">
+                {key}. {label}
+              </span>
+              {state === "correct" ? (
+                <span className="text-xs font-semibold text-emerald-200">
+                  Correcta
+                </span>
+              ) : null}
+              {state === "incorrect" ? (
+                <span className="text-xs font-semibold text-red-200">Tu respuesta</span>
+              ) : null}
+            </label>
+          );
+        })}
+        {submitted && feedback?.explanation ? (
+          <p className="rounded-lg border border-white/8 bg-white/[0.035] px-3 py-2 text-xs leading-5 text-white/60">
+            {feedback.explanation}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -1204,11 +1244,10 @@ function StudioQuestionAnswer({
             key={option}
             type="button"
             onClick={() => onChange(option)}
-            className={`rounded-lg border px-4 py-3 text-sm font-semibold ${
-              value === option
-                ? "border-[#5865ff] bg-[#5865ff]/15 text-white"
-                : "border-white/8 bg-[#12161b] text-white/80"
-            }`}
+            disabled={submitted}
+            className={`rounded-lg border px-4 py-3 text-sm font-semibold ${answerStateClass(
+              answerState({ option, value, feedback, submitted }),
+            )}`}
           >
             {label}
           </button>
@@ -1221,11 +1260,60 @@ function StudioQuestionAnswer({
     <textarea
       value={value}
       onChange={(event) => onChange(event.target.value)}
+      disabled={submitted}
       rows={5}
-      className="mt-6 w-full rounded-lg border border-white/8 bg-[#12161b] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+      className={`mt-6 w-full rounded-lg border px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 disabled:opacity-75 ${
+        submitted && feedback?.is_correct === false
+          ? "border-red-300/45 bg-red-500/10"
+          : submitted && feedback?.is_correct === true
+            ? "border-emerald-300/45 bg-emerald-500/10"
+            : "border-white/8 bg-[#12161b]"
+      }`}
       placeholder="Escribe tu respuesta"
     />
   );
+}
+
+type AnswerState = "idle" | "selected" | "correct" | "incorrect";
+
+function answerState({
+  option,
+  value,
+  feedback,
+  submitted,
+}: {
+  option: string;
+  value: string;
+  feedback: QuizFeedbackItem | null;
+  submitted: boolean;
+}): AnswerState {
+  if (!submitted) {
+    return value === option ? "selected" : "idle";
+  }
+
+  if (feedback?.correct_answer === option) {
+    return "correct";
+  }
+
+  const submittedAnswer = feedback?.submitted_answer ?? value;
+  if (submittedAnswer === option && feedback?.is_correct === false) {
+    return "incorrect";
+  }
+
+  return "idle";
+}
+
+function answerStateClass(state: AnswerState) {
+  if (state === "correct") {
+    return "border-emerald-300/55 bg-emerald-500/15 text-emerald-50";
+  }
+  if (state === "incorrect") {
+    return "border-red-300/55 bg-red-500/15 text-red-50";
+  }
+  if (state === "selected") {
+    return "border-[#5865ff] bg-[#5865ff]/15 text-white";
+  }
+  return "border-white/8 bg-[#12161b] text-white/80 hover:bg-white/[0.055]";
 }
 
 function TypingDots() {
