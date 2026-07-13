@@ -1,9 +1,27 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/src/features/auth/auth-context";
+import { ApiError } from "@/src/lib/api/client";
+import {
+  generateFlashcardDeck,
+  generateQuiz,
+  listDeckCards,
+  listFlashcardDecks,
+  listQuizQuestions,
+  listQuizzes,
+  reviewFlashcard,
+  submitQuizAnswers,
+} from "@/src/features/study-practice/api/service";
+import type {
+  FlashcardCard,
+  FlashcardDeck,
+  Quiz,
+  QuizAttempt,
+  QuizQuestion,
+} from "@/src/features/study-practice/types";
 import {
   getNotebook,
   listNotebookSources,
@@ -16,6 +34,8 @@ import {
 import type { ChatMessage, ChatNotebook, NotebookDocument } from "../types";
 
 type Status = "idle" | "loading" | "success" | "error";
+type StudioMode = "home" | "flashcards" | "quiz";
+type StudioStatus = "idle" | "generating" | "ready" | "error";
 
 function formatHour(value: string) {
   return new Intl.DateTimeFormat("es-MX", {
@@ -39,26 +59,53 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
   const [isSourceDragOver, setIsSourceDragOver] = useState(false);
   const [error, setError] = useState("");
   const [sourceError, setSourceError] = useState("");
-  const [isSourceDialogOpen, setIsSourceDialogOpen] = useState(
-    searchParams.get("new") === "1",
-  );
+  const [isSourceDialogOpen, setIsSourceDialogOpen] = useState(false);
+  const [studioMode, setStudioMode] = useState<StudioMode>("home");
+  const [studioStatus, setStudioStatus] = useState<StudioStatus>("idle");
+  const [studioError, setStudioError] = useState("");
+  const [studioDeck, setStudioDeck] = useState<FlashcardDeck | null>(null);
+  const [studioCards, setStudioCards] = useState<FlashcardCard[]>([]);
+  const [studioCardIndex, setStudioCardIndex] = useState(0);
+  const [isStudioCardFlipped, setIsStudioCardFlipped] = useState(false);
+  const [studioQuiz, setStudioQuiz] = useState<Quiz | null>(null);
+  const [studioQuestions, setStudioQuestions] = useState<QuizQuestion[]>([]);
+  const [studioQuestionIndex, setStudioQuestionIndex] = useState(0);
+  const [studioAnswers, setStudioAnswers] = useState<Record<string, string>>({});
+  const [studioAttempt, setStudioAttempt] = useState<QuizAttempt | null>(null);
+  const [isSubmittingStudioQuiz, setIsSubmittingStudioQuiz] = useState(false);
+  const [savedStudioDecks, setSavedStudioDecks] = useState<FlashcardDeck[]>([]);
+  const [savedStudioQuizzes, setSavedStudioQuizzes] = useState<Quiz[]>([]);
+  const shouldOpenNewNotebookDialog = searchParams.get("new") === "1";
 
   const loadNotebook = useCallback(async () => {
     setStatus("loading");
     try {
-      const [currentNotebook, currentMessages] = await Promise.all([
+      const [currentNotebook, currentMessages, deckList, quizList] = await Promise.all([
         getNotebook(notebookId),
         listNotebookMessages(notebookId),
+        listFlashcardDecks(),
+        listQuizzes(),
       ]);
       const currentSources = await listNotebookSources(notebookId);
       setNotebook(currentNotebook);
       setSources(currentSources);
       setMessages(currentMessages);
+      setSavedStudioDecks(deckList);
+      setSavedStudioQuizzes(quizList);
+      const seenKey = `utbooklm:notebook:${notebookId}:source-dialog-seen`;
+      const shouldAutoOpenSourceDialog =
+        currentSources.length === 0 &&
+        (shouldOpenNewNotebookDialog || currentMessages.length === 0) &&
+        window.sessionStorage.getItem(seenKey) !== "1";
+      if (shouldAutoOpenSourceDialog) {
+        window.sessionStorage.setItem(seenKey, "1");
+        setIsSourceDialogOpen(true);
+      }
       setStatus("success");
     } catch {
       setStatus("error");
     }
-  }, [notebookId]);
+  }, [notebookId, shouldOpenNewNotebookDialog]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadNotebook(), 0);
@@ -66,6 +113,39 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
   }, [loadNotebook]);
 
   const sourceCount = sources.length;
+  const readySources = useMemo(
+    () =>
+      sources.filter(
+        (source) =>
+          source.status === "ready" &&
+          (source.chunk_count == null || Number(source.chunk_count) > 0),
+      ),
+    [sources],
+  );
+  const readySourceIds = useMemo(
+    () => readySources.map((source) => source.id),
+    [readySources],
+  );
+  const studioSourceCount = readySources.length;
+  const studioCard = studioCards[studioCardIndex] ?? null;
+  const studioQuestion = studioQuestions[studioQuestionIndex] ?? null;
+  const notebookTitle = notebook?.title ?? "";
+  const savedDecksForNotebook = useMemo(() => {
+    const sourceIds = new Set(readySourceIds);
+    return savedStudioDecks.filter((deck) =>
+      deck.notebook_id === notebookId ||
+      deck.document_ids?.some((documentId) => sourceIds.has(documentId)) ||
+      (deck.document_id ? sourceIds.has(deck.document_id) : false),
+    );
+  }, [notebookId, readySourceIds, savedStudioDecks]);
+  const savedQuizzesForNotebook = useMemo(() => {
+    const sourceIds = new Set(readySourceIds);
+    return savedStudioQuizzes.filter((quiz) =>
+      quiz.notebook_id === notebookId ||
+      quiz.document_ids?.some((documentId) => sourceIds.has(documentId)) ||
+      (quiz.document_id ? sourceIds.has(quiz.document_id) : false),
+    );
+  }, [notebookId, readySourceIds, savedStudioQuizzes]);
 
   async function uploadSources(files: FileList | null) {
     if (!files?.length || isUploadingSource) return;
@@ -82,6 +162,10 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
       const updatedSources = await listNotebookSources(notebookId);
       setNotebook(updatedNotebook);
       setSources(updatedSources);
+      window.sessionStorage.setItem(
+        `utbooklm:notebook:${notebookId}:source-dialog-seen`,
+        "1",
+      );
       setIsSourceDialogOpen(false);
     } catch {
       setSourceError("No fue posible subir o asociar esas fuentes.");
@@ -114,6 +198,14 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
     }
   }
 
+  function closeSourceDialog() {
+    window.sessionStorage.setItem(
+      `utbooklm:notebook:${notebookId}:source-dialog-seen`,
+      "1",
+    );
+    setIsSourceDialogOpen(false);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const content = prompt.trim();
@@ -129,11 +221,142 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
         response.user_message,
         response.assistant_message,
       ]);
-    } catch {
+    } catch (exc) {
       setPrompt(content);
-      setError("No fue posible generar una respuesta para este cuaderno.");
+      setError(
+        exc instanceof ApiError && exc.errorCode === "dependency_unavailable"
+          ? "La IA no esta disponible con la configuracion actual. Puedes seguir estudiando con Studio."
+          : "No fue posible generar una respuesta para este cuaderno.",
+      );
     } finally {
       setIsSending(false);
+    }
+  }
+
+  async function startStudioFlashcards() {
+    if (studioSourceCount === 0 || studioStatus === "generating") return;
+
+    setStudioMode("flashcards");
+    setStudioStatus("generating");
+    setStudioError("");
+    setStudioDeck(null);
+    setStudioCards([]);
+    setStudioCardIndex(0);
+    setIsStudioCardFlipped(false);
+    try {
+      const deck = await generateFlashcardDeck({
+        document_ids: readySourceIds,
+        notebook_id: notebookId,
+        count: 10,
+        difficulty: "medium",
+        deck_name: `${notebookTitle || "Cuaderno"} Flashcards`,
+      });
+      const cards = await listDeckCards(deck.id);
+      setStudioDeck(deck);
+      setStudioCards(cards);
+      setSavedStudioDecks((current) => [
+        deck,
+        ...current.filter((item) => item.id !== deck.id),
+      ]);
+      setStudioStatus("ready");
+    } catch {
+      setStudioStatus("error");
+      setStudioError("No fue posible generar tarjetas con estas fuentes.");
+    }
+  }
+
+  async function startStudioQuiz() {
+    if (studioSourceCount === 0 || studioStatus === "generating") return;
+
+    setStudioMode("quiz");
+    setStudioStatus("generating");
+    setStudioError("");
+    setStudioQuiz(null);
+    setStudioQuestions([]);
+    setStudioQuestionIndex(0);
+    setStudioAnswers({});
+    setStudioAttempt(null);
+    try {
+      const quiz = await generateQuiz({
+        document_ids: readySourceIds,
+        notebook_id: notebookId,
+        title: `${notebookTitle || "Cuaderno"} Cuestionario`,
+        question_count: 10,
+        question_types: ["multiple_choice"],
+      });
+      const questions = await listQuizQuestions(quiz.id);
+      setStudioQuiz(quiz);
+      setStudioQuestions(questions);
+      setSavedStudioQuizzes((current) => [
+        quiz,
+        ...current.filter((item) => item.id !== quiz.id),
+      ]);
+      setStudioStatus("ready");
+    } catch {
+      setStudioStatus("error");
+      setStudioError("No fue posible generar un cuestionario con estas fuentes.");
+    }
+  }
+
+  async function openSavedStudioDeck(deck: FlashcardDeck) {
+    setStudioMode("flashcards");
+    setStudioStatus("generating");
+    setStudioError("");
+    setStudioDeck(deck);
+    setStudioCards([]);
+    setStudioCardIndex(0);
+    setIsStudioCardFlipped(false);
+    try {
+      const cards = await listDeckCards(deck.id);
+      setStudioCards(cards);
+      setStudioStatus("ready");
+    } catch {
+      setStudioStatus("error");
+      setStudioError("No fue posible abrir estas tarjetas.");
+    }
+  }
+
+  async function openSavedStudioQuiz(quiz: Quiz) {
+    setStudioMode("quiz");
+    setStudioStatus("generating");
+    setStudioError("");
+    setStudioQuiz(quiz);
+    setStudioQuestions([]);
+    setStudioQuestionIndex(0);
+    setStudioAnswers({});
+    setStudioAttempt(null);
+    try {
+      const questions = await listQuizQuestions(quiz.id);
+      setStudioQuestions(questions);
+      setStudioStatus("ready");
+    } catch {
+      setStudioStatus("error");
+      setStudioError("No fue posible abrir este cuestionario.");
+    }
+  }
+
+  async function reviewStudioCard(remembered: boolean) {
+    if (!studioCard) return;
+
+    await reviewFlashcard(studioCard.id, remembered);
+    setIsStudioCardFlipped(false);
+    setStudioCardIndex((current) =>
+      current < studioCards.length - 1 ? current + 1 : 0,
+    );
+  }
+
+  async function submitStudioQuiz() {
+    if (!studioQuiz || Object.keys(studioAnswers).length === 0) return;
+
+    setIsSubmittingStudioQuiz(true);
+    setStudioError("");
+    try {
+      const attempt = await submitQuizAnswers(studioQuiz.id, studioAnswers);
+      setStudioAttempt(attempt);
+    } catch {
+      setStudioError("No fue posible enviar tus respuestas.");
+    } finally {
+      setIsSubmittingStudioQuiz(false);
     }
   }
 
@@ -195,7 +418,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
       ) : null}
 
       {status === "success" ? (
-        <div className="grid min-h-[calc(100vh-4rem)] grid-cols-1 gap-3 p-3 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="grid min-h-[calc(100vh-4rem)] grid-cols-1 gap-3 p-3 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_300px]">
           <aside className="rounded-xl border border-white/8 bg-[#171a1d] p-4">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">Fuentes</h2>
@@ -264,15 +487,15 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
               ) : (
                 <div className="grid min-h-[420px] place-items-center text-center">
                   <div className="max-w-[240px] text-sm text-white/42">
-                  <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-white/35">
-                    +
-                  </div>
-                  <p className="font-semibold text-white/55">
-                    Aun no hay fuentes
-                  </p>
-                  <p className="mt-2 text-xs leading-5">
-                    Anade PDF, PPTX, Markdown o texto para alimentar este cuaderno.
-                  </p>
+                    <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-white/35">
+                      +
+                    </div>
+                    <p className="font-semibold text-white/55">
+                      Aun no hay fuentes
+                    </p>
+                    <p className="mt-2 text-xs leading-5">
+                      Anade PDF, PPTX, Markdown o texto para alimentar este cuaderno.
+                    </p>
                   </div>
                 </div>
               )}
@@ -289,18 +512,24 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
                 <div className="grid min-h-80 place-items-center text-center">
                   <div>
                     <h2 className="text-xl font-semibold">
-                      Anade fuentes para empezar
+                      {sourceCount > 0
+                        ? "Pregunta sobre tus fuentes"
+                        : "Anade fuentes para empezar"}
                     </h2>
                     <p className="mt-2 max-w-md text-sm text-white/55">
-                      Sube una fuente y despues pregunta sobre ese contenido.
+                      {sourceCount > 0
+                        ? "Usa el chat o genera material de practica desde Studio."
+                        : "Sube una fuente y despues pregunta sobre ese contenido."}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setIsSourceDialogOpen(true)}
-                      className="mt-5 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/85"
-                    >
-                      Anadir fuentes
-                    </button>
+                    {sourceCount === 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsSourceDialogOpen(true)}
+                        className="mt-5 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/85"
+                      >
+                        Anadir fuentes
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ) : (
@@ -317,15 +546,23 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
                       <span>{message.role === "user" ? "Tu" : "UTBookLM"}</span>
                       <span>{formatHour(message.created_at)}</span>
                     </div>
-                    <p className="whitespace-pre-wrap text-sm leading-6">
-                      {message.content}
-                    </p>
+                    <ChatMessageContent
+                      content={message.content}
+                      variant={message.role === "user" ? "light" : "dark"}
+                    />
                   </article>
                 ))
               )}
               {isSending ? (
-                <div className="max-w-3xl rounded-xl border border-white/10 bg-white/[0.05] p-4 text-sm text-white/55">
-                  Generando respuesta...
+                <div className="max-w-3xl rounded-xl border border-white/10 bg-white/[0.05] p-4 text-sm text-white/65">
+                  <div className="mb-2 flex items-center justify-between gap-4 text-xs opacity-60">
+                    <span>UTBookLM</span>
+                    <span>Ahora</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>Generando respuesta</span>
+                    <TypingDots />
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -341,7 +578,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
                 <input
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
-                  placeholder="Empieza a escribir..."
+                  placeholder={isSending ? "Generando respuesta..." : "Empieza a escribir..."}
                   disabled={isSending || sourceCount === 0}
                   className="min-w-0 flex-1 bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-50"
                 />
@@ -350,11 +587,72 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
                   disabled={isSending || !prompt.trim() || sourceCount === 0}
                   className="flex h-10 w-16 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white disabled:opacity-40"
                 >
-                  Enviar
+                  {isSending ? "..." : "Enviar"}
                 </button>
               </div>
             </form>
           </main>
+
+          <aside className="rounded-xl border border-white/8 bg-[#171a1d]">
+            {studioMode === "home" ? (
+              <StudioHomePanel
+                sourceCount={sourceCount}
+                readySourceCount={studioSourceCount}
+                isGenerating={studioStatus === "generating"}
+                savedDecks={savedDecksForNotebook}
+                savedQuizzes={savedQuizzesForNotebook}
+                onGenerateFlashcards={() => void startStudioFlashcards()}
+                onGenerateQuiz={() => void startStudioQuiz()}
+                onOpenDeck={(deck) => void openSavedStudioDeck(deck)}
+                onOpenQuiz={(quiz) => void openSavedStudioQuiz(quiz)}
+              />
+            ) : studioMode === "quiz" ? (
+              <StudioQuizPanel
+                quiz={studioQuiz}
+                question={studioQuestion}
+                questionIndex={studioQuestionIndex}
+                questionCount={studioQuestions.length}
+                answers={studioAnswers}
+                attempt={studioAttempt}
+                status={studioStatus}
+                error={studioError}
+                sourceCount={studioSourceCount}
+                isSubmitting={isSubmittingStudioQuiz}
+                onBack={() => setStudioMode("home")}
+                onAnswer={(questionId, value) =>
+                  setStudioAnswers((current) => ({
+                    ...current,
+                    [questionId]: value,
+                  }))
+                }
+                onNext={() =>
+                  setStudioQuestionIndex((current) =>
+                    current < studioQuestions.length - 1 ? current + 1 : current,
+                  )
+                }
+                onPrevious={() =>
+                  setStudioQuestionIndex((current) =>
+                    current > 0 ? current - 1 : current,
+                  )
+                }
+                onSubmit={() => void submitStudioQuiz()}
+              />
+            ) : (
+              <StudioFlashcardsPanel
+                deck={studioDeck}
+                card={studioCard}
+                cardIndex={studioCardIndex}
+                cardCount={studioCards.length}
+                isFlipped={isStudioCardFlipped}
+                status={studioStatus}
+                error={studioError}
+                sourceCount={studioSourceCount}
+                onBack={() => setStudioMode("home")}
+                onFlip={() => setIsStudioCardFlipped((current) => !current)}
+                onReview={(remembered) => void reviewStudioCard(remembered)}
+              />
+            )}
+          </aside>
 
           {isSourceDialogOpen ? (
             <div className="fixed inset-0 z-10 grid place-items-center bg-black/55 p-5">
@@ -368,7 +666,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setIsSourceDialogOpen(false)}
+                    onClick={closeSourceDialog}
                     className="text-2xl text-white/55"
                     aria-label="Cerrar"
                   >
@@ -423,5 +721,629 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
         </div>
       ) : null}
     </section>
+  );
+}
+
+interface StudioActionProps {
+  title: string;
+  description: string;
+  enabled: boolean;
+  accent: string;
+  onClick: () => void;
+}
+
+function StudioHomePanel({
+  sourceCount,
+  readySourceCount,
+  isGenerating,
+  savedDecks,
+  savedQuizzes,
+  onGenerateFlashcards,
+  onGenerateQuiz,
+  onOpenDeck,
+  onOpenQuiz,
+}: {
+  sourceCount: number;
+  readySourceCount: number;
+  isGenerating: boolean;
+  savedDecks: FlashcardDeck[];
+  savedQuizzes: Quiz[];
+  onGenerateFlashcards: () => void;
+  onGenerateQuiz: () => void;
+  onOpenDeck: (deck: FlashcardDeck) => void;
+  onOpenQuiz: (quiz: Quiz) => void;
+}) {
+  const enabled = readySourceCount > 0 && !isGenerating;
+  const hasSavedItems = savedDecks.length > 0 || savedQuizzes.length > 0;
+
+  return (
+    <div className="p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">Studio</h2>
+        <span className="text-xs text-white/45">{sourceCount} fuentes</span>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        <StudioAction
+          title="Tarjetas didacticas"
+          description="Genera flashcards desde estas fuentes."
+          enabled={enabled}
+          accent="bg-[#253348] text-[#b9d4ff]"
+          onClick={onGenerateFlashcards}
+        />
+        <StudioAction
+          title="Cuestionario"
+          description="Crea un quiz para practicar aqui."
+          enabled={enabled}
+          accent="bg-[#2d3a2c] text-[#bdf5c7]"
+          onClick={onGenerateQuiz}
+        />
+      </div>
+
+      {isGenerating ? (
+        <div className="mt-8 rounded-lg border border-white/8 bg-white/[0.045] p-4 text-sm text-white/70">
+          Generando material de practica...
+        </div>
+      ) : null}
+
+      <div className="mt-8 border-t border-white/8 pt-5">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/35">
+          Resultados
+        </h3>
+
+        {hasSavedItems ? (
+          <div className="mt-4 space-y-2">
+            {savedQuizzes.map((quiz) => (
+              <StudioSavedItem
+                key={quiz.id}
+                label="Cuestionario"
+                title={quiz.title}
+                onClick={() => onOpenQuiz(quiz)}
+              />
+            ))}
+            {savedDecks.map((deck) => (
+              <StudioSavedItem
+                key={deck.id}
+                label={`${deck.card_count} tarjetas`}
+                title={deck.name}
+                onClick={() => onOpenDeck(deck)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="pt-8 text-center">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-white/35">
+              *
+            </div>
+            <p className="mt-4 text-sm font-semibold text-white/70">
+              {readySourceCount > 0
+                ? "Los resultados de Studio se guardaran aqui."
+                : "Anade una fuente lista para activar Studio."}
+            </p>
+            <p className="mt-2 text-xs leading-5 text-white/45">
+              Solo mostramos funciones conectadas al backend actual.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StudioSavedItem({
+  label,
+  title,
+  onClick,
+}: {
+  label: string;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/8 bg-white/[0.035] p-3 text-left transition-colors hover:border-white/18 hover:bg-white/[0.07]"
+    >
+      <span className="min-w-0">
+        <span className="block text-xs font-semibold text-white/45">{label}</span>
+        <span className="mt-1 block truncate text-sm font-semibold text-white/85">
+          {title}
+        </span>
+      </span>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm text-white/70">
+        &gt;
+      </span>
+    </button>
+  );
+}
+
+function StudioAction({
+  title,
+  description,
+  enabled,
+  accent,
+  onClick,
+}: StudioActionProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!enabled}
+      className="flex w-full items-center gap-3 rounded-lg border border-white/8 bg-white/[0.045] p-3 transition-colors hover:border-white/18 hover:bg-white/[0.075] disabled:cursor-not-allowed disabled:opacity-45"
+    >
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm ${accent}`}>
+        {title.slice(0, 1)}
+      </span>
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block text-sm font-semibold text-white/90">{title}</span>
+        <span className="mt-1 block text-xs leading-4 text-white/48">
+          {description}
+        </span>
+      </span>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm text-white/70">
+        &gt;
+      </span>
+    </button>
+  );
+}
+
+interface StudioQuizPanelProps {
+  quiz: Quiz | null;
+  question: QuizQuestion | null;
+  questionIndex: number;
+  questionCount: number;
+  answers: Record<string, string>;
+  attempt: QuizAttempt | null;
+  status: StudioStatus;
+  error: string;
+  sourceCount: number;
+  isSubmitting: boolean;
+  onBack: () => void;
+  onAnswer: (questionId: string, value: string) => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  onSubmit: () => void;
+}
+
+function StudioQuizPanel({
+  quiz,
+  question,
+  questionIndex,
+  questionCount,
+  answers,
+  attempt,
+  status,
+  error,
+  sourceCount,
+  isSubmitting,
+  onBack,
+  onAnswer,
+  onNext,
+  onPrevious,
+  onSubmit,
+}: StudioQuizPanelProps) {
+  const answerValue = question ? answers[question.id] ?? "" : "";
+  const isLastQuestion = questionIndex >= questionCount - 1;
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <StudioPanelHeader onBack={onBack} title="Cuestionario" />
+      <div className="flex-1 p-4">
+        <h2 className="text-lg font-semibold text-white">
+          {quiz?.title ?? "Generando cuestionario"}
+        </h2>
+        <p className="mt-2 inline-flex rounded-full border border-white/12 px-3 py-1 text-xs text-white/70">
+          {sourceCount} {sourceCount === 1 ? "fuente" : "fuentes"}
+        </p>
+
+        {status === "generating" ? (
+          <StudioLoadingState label="Generando cuestionario..." />
+        ) : null}
+
+        {status === "error" ? <StudioErrorState message={error} /> : null}
+
+        {status === "ready" && question ? (
+          <div className="mt-8">
+            <div className="mb-5 flex items-center justify-between text-xs text-white/45">
+              <span>
+                {questionIndex + 1}/{questionCount}
+              </span>
+            </div>
+            <p className="text-sm font-semibold leading-6 text-white">
+              {question.prompt}
+            </p>
+            <StudioQuestionAnswer
+              question={question}
+              value={answerValue}
+              onChange={(value) => onAnswer(question.id, value)}
+            />
+            <div className="mt-6 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={onPrevious}
+                disabled={questionIndex === 0}
+                className="rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white/75 disabled:opacity-35"
+              >
+                Anterior
+              </button>
+              {isLastQuestion ? (
+                <button
+                  type="button"
+                  onClick={onSubmit}
+                  disabled={!answerValue || isSubmitting}
+                  className="rounded-full bg-[#5865ff] px-4 py-2 text-xs font-semibold text-white disabled:opacity-45"
+                >
+                  {isSubmitting ? "Enviando..." : "Enviar"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onNext}
+                  disabled={!answerValue}
+                  className="rounded-full bg-[#5865ff] px-4 py-2 text-xs font-semibold text-white disabled:opacity-45"
+                >
+                  Siguiente
+                </button>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {status === "ready" && !question ? (
+          <StudioErrorState message="No llegaron preguntas para este cuestionario." />
+        ) : null}
+      </div>
+
+      <div className="border-t border-white/8 p-4">
+        {attempt ? (
+          <div className="rounded-lg border border-emerald-300/20 bg-emerald-400/10 p-3 text-sm text-emerald-100">
+            <p className="font-semibold">Resultado: {attempt.score ?? 0} puntos</p>
+            <p className="mt-1 text-xs text-emerald-100/70">
+              Tus respuestas quedaron guardadas.
+            </p>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="flex-1 rounded-full border border-white/12 px-3 py-2 text-xs font-semibold text-white/75"
+            >
+              Contenido adecuado
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded-full border border-white/12 px-3 py-2 text-xs font-semibold text-white/75"
+            >
+              Contenido inadecuado
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface StudioFlashcardsPanelProps {
+  deck: FlashcardDeck | null;
+  card: FlashcardCard | null;
+  cardIndex: number;
+  cardCount: number;
+  isFlipped: boolean;
+  status: StudioStatus;
+  error: string;
+  sourceCount: number;
+  onBack: () => void;
+  onFlip: () => void;
+  onReview: (remembered: boolean) => void;
+}
+
+function StudioFlashcardsPanel({
+  deck,
+  card,
+  cardIndex,
+  cardCount,
+  isFlipped,
+  status,
+  error,
+  sourceCount,
+  onBack,
+  onFlip,
+  onReview,
+}: StudioFlashcardsPanelProps) {
+  return (
+    <div className="flex min-h-full flex-col">
+      <StudioPanelHeader onBack={onBack} title="Tarjetas didacticas" />
+      <div className="flex-1 p-4">
+        <h2 className="text-lg font-semibold text-white">
+          {deck?.name ?? "Generando tarjetas"}
+        </h2>
+        <p className="mt-2 inline-flex rounded-full border border-white/12 px-3 py-1 text-xs text-white/70">
+          {sourceCount} {sourceCount === 1 ? "fuente" : "fuentes"}
+        </p>
+
+        {status === "generating" ? (
+          <StudioLoadingState label="Generando tarjetas..." />
+        ) : null}
+
+        {status === "error" ? <StudioErrorState message={error} /> : null}
+
+        {status === "ready" && card ? (
+          <div className="mt-8">
+            <p className="mb-4 text-xs text-white/45">
+              {cardIndex + 1}/{cardCount}
+            </p>
+            <button
+              type="button"
+              onClick={onFlip}
+              className="flex min-h-56 w-full flex-col items-center justify-center rounded-xl border border-white/10 bg-[#12161b] p-5 text-center"
+            >
+              <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/60">
+                {isFlipped ? "Respuesta" : "Pregunta"}
+              </span>
+              <p className="mt-5 text-sm font-semibold leading-6 text-white">
+                {isFlipped ? card.answer : card.question}
+              </p>
+              <span className="mt-5 text-xs text-white/35">
+                Clic para voltear
+              </span>
+            </button>
+
+            {isFlipped ? (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => onReview(false)}
+                  className="rounded-full border border-white/12 px-3 py-2 text-xs font-semibold text-white/75"
+                >
+                  Repasar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onReview(true)}
+                  className="rounded-full bg-[#5865ff] px-3 py-2 text-xs font-semibold text-white"
+                >
+                  La recorde
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {status === "ready" && !card ? (
+          <StudioErrorState message="No llegaron tarjetas para este mazo." />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function StudioPanelHeader({
+  title,
+  onBack,
+}: {
+  title: string;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-sm font-semibold text-white/85"
+      >
+        Studio &gt; Aplicacion
+      </button>
+      <span className="text-xs text-white/45">{title}</span>
+    </div>
+  );
+}
+
+function StudioLoadingState({ label }: { label: string }) {
+  return (
+    <div className="mt-8 rounded-lg border border-white/8 bg-white/[0.045] p-4">
+      <p className="text-sm font-semibold text-white/80">{label}</p>
+      <p className="mt-1 text-xs text-white/45">Basado en tus fuentes listas.</p>
+    </div>
+  );
+}
+
+function StudioErrorState({ message }: { message: string }) {
+  return (
+    <div className="mt-6 rounded-lg border border-red-300/25 bg-red-400/10 p-3 text-sm text-red-200">
+      {message}
+    </div>
+  );
+}
+
+function StudioQuestionAnswer({
+  question,
+  value,
+  onChange,
+}: {
+  question: QuizQuestion;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  if (question.question_type === "multiple_choice" && question.options) {
+    return (
+      <div className="mt-6 space-y-3">
+        {Object.entries(question.options).map(([key, label]) => (
+          <label
+            key={key}
+            className={`flex cursor-pointer gap-3 rounded-lg border px-4 py-3 text-sm transition-colors ${
+              value === key
+                ? "border-[#5865ff] bg-[#5865ff]/15 text-white"
+                : "border-white/8 bg-[#12161b] text-white/80 hover:bg-white/[0.055]"
+            }`}
+          >
+            <input
+              type="radio"
+              name={question.id}
+              checked={value === key}
+              onChange={() => onChange(key)}
+              className="mt-1"
+            />
+            <span>
+              {key}. {label}
+            </span>
+          </label>
+        ))}
+      </div>
+    );
+  }
+
+  if (question.question_type === "true_false") {
+    return (
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        {[
+          ["true", "Verdadero"],
+          ["false", "Falso"],
+        ].map(([option, label]) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onChange(option)}
+            className={`rounded-lg border px-4 py-3 text-sm font-semibold ${
+              value === option
+                ? "border-[#5865ff] bg-[#5865ff]/15 text-white"
+                : "border-white/8 bg-[#12161b] text-white/80"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <textarea
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      rows={5}
+      className="mt-6 w-full rounded-lg border border-white/8 bg-[#12161b] px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+      placeholder="Escribe tu respuesta"
+    />
+  );
+}
+
+function TypingDots() {
+  return (
+    <span className="inline-flex items-center gap-1" aria-hidden="true">
+      {[0, 1, 2].map((index) => (
+        <span
+          key={index}
+          className="h-1.5 w-1.5 animate-pulse rounded-full bg-current"
+          style={{ animationDelay: `${index * 160}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function ChatMessageContent({
+  content,
+  variant,
+}: {
+  content: string;
+  variant: "dark" | "light";
+}) {
+  const blocks = parseChatBlocks(content);
+
+  return (
+    <div
+      className={`space-y-3 text-sm leading-6 ${
+        variant === "dark" ? "text-white/90" : "text-[#20242a]"
+      }`}
+    >
+      {blocks.map((block, index) => {
+        if (block.type === "list") {
+          return (
+            <ol key={index} className="space-y-3 pl-5">
+              {block.items.map((item, itemIndex) => (
+                <li key={`${index}-${itemIndex}`} className="list-decimal pl-1">
+                  <InlineMarkdown text={item} />
+                </li>
+              ))}
+            </ol>
+          );
+        }
+
+        if (block.type === "bullets") {
+          return (
+            <ul key={index} className="space-y-2 pl-5">
+              {block.items.map((item, itemIndex) => (
+                <li key={`${index}-${itemIndex}`} className="list-disc pl-1">
+                  <InlineMarkdown text={item} />
+                </li>
+              ))}
+            </ul>
+          );
+        }
+
+        return (
+          <p key={index}>
+            <InlineMarkdown text={block.text} />
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+type ChatBlock =
+  | { type: "paragraph"; text: string }
+  | { type: "list"; items: string[] }
+  | { type: "bullets"; items: string[] };
+
+function parseChatBlocks(content: string): ChatBlock[] {
+  const lines = content
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const blocks: ChatBlock[] = [];
+
+  for (const line of lines) {
+    const numbered = line.match(/^\d+\.\s*(.*)$/);
+    if (numbered) {
+      const last = blocks.at(-1);
+      if (last?.type === "list") {
+        last.items.push(numbered[1]);
+      } else {
+        blocks.push({ type: "list", items: [numbered[1]] });
+      }
+      continue;
+    }
+
+    const bullet = line.match(/^(?:[-*]|•)\s*(.*)$/);
+    if (bullet) {
+      const last = blocks.at(-1);
+      if (last?.type === "bullets") {
+        last.items.push(bullet[1]);
+      } else {
+        blocks.push({ type: "bullets", items: [bullet[1]] });
+      }
+      continue;
+    }
+
+    blocks.push({ type: "paragraph", text: line });
+  }
+
+  return blocks;
+}
+
+function InlineMarkdown({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={index}>{part.slice(2, -2)}</strong>;
+        }
+        return <span key={index}>{part}</span>;
+      })}
+    </>
   );
 }
