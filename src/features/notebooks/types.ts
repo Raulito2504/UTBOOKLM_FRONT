@@ -24,12 +24,13 @@ export interface CreateNotebookRequest {
 export interface NotebookDocument {
   id: string;
   title: string;
-  file_path: string;
+  file_path?: string;
   original_filename: string | null;
   mime_type: string | null;
-  storage_backend: string;
+  storage_backend?: string;
   file_size_bytes: number;
   page_count: number;
+  chunk_count?: number | null;
   status: "processing" | "ready" | "failed";
   created_at: string;
 }

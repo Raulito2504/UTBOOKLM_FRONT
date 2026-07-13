@@ -10,6 +10,7 @@ export interface Document {
   file_size_bytes: number;
   status: DocumentStatus;
   page_count: number;
+  chunk_count?: number | null;
   created_at: string;
 }
 
