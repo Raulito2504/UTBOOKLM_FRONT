@@ -1,5 +1,5 @@
+import { GuestRoute } from "@/src/features/auth/guards";
+
 export default function Layout({ children }: { children: React.ReactNode }) {
-  return (
-    <div>{children}</div>
-  );
+  return <GuestRoute>{children}</GuestRoute>;
 }

@@ -1,5 +1,5 @@
-export default function Page() {
-  return (
-    <div>app</div>
-  );
+import { RoomsView } from "@/src/components/rooms/rooms-view";
+
+export default function RoomsPage() {
+  return <RoomsView />;
 }
