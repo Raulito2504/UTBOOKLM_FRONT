@@ -3,6 +3,3 @@ export const API_BASE_URL =
 
 export const USE_MOCK_DATA =
   process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
-
-export const AUTH_PREVIEW_MODE =
-  process.env.NEXT_PUBLIC_AUTH_PREVIEW === "true";

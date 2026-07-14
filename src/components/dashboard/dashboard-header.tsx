@@ -1,4 +1,4 @@
-import type { UserProfile } from "@/src/features/auth/hooks/auth";
+import type { UserProfile } from "@/src/types/auth";
 
 interface DashboardHeaderProps {
   user: UserProfile;
