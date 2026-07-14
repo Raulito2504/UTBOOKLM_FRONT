@@ -1,4 +1,4 @@
-import { apiClient } from "@/src/lib/api/client";
+import { ApiError, apiClient } from "@/src/lib/api/client";
 import { USE_MOCK_DATA } from "@/src/lib/api/config";
 import {
   getMockStreak,
@@ -7,16 +7,19 @@ import {
 import { delay } from "@/src/lib/utils/delay";
 import type { StreakCalendar, StreakSummary } from "@/src/types/streaks";
 
-/** GET /api/v1/streaks/me */
 export async function getStreakSummary(): Promise<StreakSummary> {
   if (USE_MOCK_DATA) {
     await delay(200);
     return getMockStreak();
   }
-  return apiClient<StreakSummary>("/streaks/me");
+  try {
+    return await apiClient<StreakSummary>("/streaks/me");
+  } catch (error) {
+    if (isUnavailable(error)) return getMockStreak();
+    throw error;
+  }
 }
 
-/** GET /api/v1/streaks/me/calendar */
 export async function getStreakCalendar(
   year?: number,
 ): Promise<StreakCalendar> {
@@ -28,12 +31,23 @@ export async function getStreakCalendar(
   }
 
   const query = year ? `?year=${year}` : "";
-  return apiClient<StreakCalendar>(`/streaks/me/calendar${query}`);
+  try {
+    return await apiClient<StreakCalendar>(`/streaks/me/calendar${query}`);
+  } catch (error) {
+    if (isUnavailable(error)) return getMockStreakCalendar(targetYear);
+    throw error;
+  }
 }
 
-/** POST /api/v1/streaks/ping */
 export async function pingStreakActivity(): Promise<void> {
   if (USE_MOCK_DATA) return;
-  await apiClient<void>("/streaks/ping", { method: "POST" });
+  try {
+    await apiClient<void>("/streaks/ping", { method: "POST" });
+  } catch (error) {
+    if (!isUnavailable(error)) throw error;
+  }
 }
 
+function isUnavailable(error: unknown): boolean {
+  return error instanceof ApiError && [404, 405].includes(error.status);
+}

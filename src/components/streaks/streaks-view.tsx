@@ -35,7 +35,8 @@ export function StreaksView() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    const timer = window.setTimeout(() => void loadData(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadData]);
 
   if (loading || !streak || !calendar) {

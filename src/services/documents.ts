@@ -12,7 +12,21 @@ import type {
   UploadDocumentResponse,
 } from "@/src/types/documents";
 
-/** GET /api/v1/docs */
+interface BackendDocumentListResponse {
+  items: Document[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+interface BackendDocumentUploadResponse {
+  document: Document;
+  ingestion_job: {
+    id: string;
+    status: string;
+  };
+}
+
 export async function listDocuments(
   page = 1,
   pageSize = 20,
@@ -24,13 +38,17 @@ export async function listDocuments(
   }
 
   const offset = (page - 1) * pageSize;
-  const items = await apiClient<Document[]>(
+  const response = await apiClient<BackendDocumentListResponse>(
     `/docs?limit=${pageSize}&offset=${offset}`,
   );
-  return { items, total: items.length, page, page_size: pageSize };
+  return {
+    items: response.items,
+    total: response.total,
+    page,
+    page_size: response.limit,
+  };
 }
 
-/** POST /api/v1/docs */
 export async function uploadDocument(
   file: File,
 ): Promise<UploadDocumentResponse> {
@@ -46,19 +64,18 @@ export async function uploadDocument(
 
   const formData = new FormData();
   formData.append("file", file);
-  const document = await apiClient<Document>("/docs", {
+  const response = await apiClient<BackendDocumentUploadResponse>("/docs/upload", {
     method: "POST",
     body: formData,
   });
 
   return {
-    id: document.id,
-    status: document.status,
-    message: "Documento listo para usarse",
+    id: response.document.id,
+    status: response.document.status,
+    message: `Documento ${response.ingestion_job.status}`,
   };
 }
 
-/** DELETE /api/v1/docs/:doc_id */
 export async function deleteDocument(id: string): Promise<void> {
   if (USE_MOCK_DATA) {
     await delay(200);
@@ -68,7 +85,6 @@ export async function deleteDocument(id: string): Promise<void> {
   await apiClient<void>(`/docs/${id}`, { method: "DELETE" });
 }
 
-/** GET /api/v1/docs/:doc_id */
 export async function getDocument(id: string): Promise<Document> {
   if (USE_MOCK_DATA) {
     await delay(200);
@@ -76,5 +92,6 @@ export async function getDocument(id: string): Promise<Document> {
     if (!doc) throw new Error("Documento no encontrado");
     return doc;
   }
-  return apiClient<Document>(`/docs/${id}`);
+  const response = await apiClient<{ document: Document } | Document>(`/docs/${id}`);
+  return "document" in response ? response.document : response;
 }

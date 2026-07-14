@@ -41,7 +41,8 @@ export function RoomsView() {
   }, []);
 
   useEffect(() => {
-    loadRooms();
+    const timer = window.setTimeout(() => void loadRooms(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadRooms]);
 
   async function handleCreate(e: FormEvent) {

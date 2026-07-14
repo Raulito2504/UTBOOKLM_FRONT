@@ -9,9 +9,36 @@ import type {
   RagHistoryResponse,
   RagQuery,
   RagQueryRequest,
+  RagSource,
 } from "@/src/types/rag";
 
-/** POST /api/v1/rag/query */
+interface ChatResponse {
+  id: string;
+  title: string;
+  document_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+interface RagGenerateResponse {
+  user_message: {
+    id: string;
+    content: string;
+    created_at: string;
+  };
+  assistant_message: {
+    id: string;
+    content: string;
+    created_at: string;
+  };
+  sources: Array<{
+    document_id: string;
+    chunk_id: string;
+    page_number: number | null;
+    preview: string;
+  }>;
+}
+
 export async function submitRagQuery(
   request: RagQueryRequest,
 ): Promise<RagQuery> {
@@ -19,33 +46,84 @@ export async function submitRagQuery(
     await delay(1200);
     return mockRagQuery(request);
   }
-  return apiClient<RagQuery>("/rag/query", {
+
+  const chat = await apiClient<ChatResponse>("/rag/chats", {
     method: "POST",
-    body: JSON.stringify(request),
+    body: JSON.stringify({
+      title: request.question.slice(0, 80),
+      document_ids: request.doc_ids,
+    }),
   });
+  const response = await apiClient<RagGenerateResponse>(`/rag/chats/${chat.id}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ content: request.question }),
+  });
+
+  return toRagQuery(chat, response);
 }
 
-/** GET /api/v1/rag/history */
 export async function getRagHistory(): Promise<RagHistoryResponse> {
   if (USE_MOCK_DATA) {
     await delay(250);
     const items = getMockRagHistory();
     return { items, total: items.length };
   }
-  return apiClient<RagHistoryResponse>("/rag/history");
+
+  const chats = await apiClient<ChatResponse[]>("/rag/chats?limit=20&offset=0");
+  const items = await Promise.all(chats.map(chatToHistoryItem));
+  return { items: items.filter(Boolean) as RagQuery[], total: items.length };
 }
 
-/** POST /api/v1/rag/summarize */
 export async function summarizeDocuments(docIds: string[]): Promise<{ summary: string }> {
   if (USE_MOCK_DATA) {
     await delay(1500);
     return {
       summary:
-        "Resumen simulado: los documentos seleccionados cubren temas de grafos, normalización de bases de datos y patrones de diseño. Cuando el backend esté listo, recibirás un resumen estructurado por capítulo o tema.",
+        "Resumen simulado: los documentos seleccionados cubren temas de grafos, normalización de bases de datos y patrones de diseño.",
     };
   }
-  return apiClient<{ summary: string }>("/rag/summarize", {
-    method: "POST",
-    body: JSON.stringify({ doc_ids: docIds }),
+
+  const result = await submitRagQuery({
+    doc_ids: docIds,
+    question: "Genera un resumen claro y breve de los documentos seleccionados, organizado por temas principales.",
   });
+  return { summary: result.answer };
+}
+
+async function chatToHistoryItem(chat: ChatResponse): Promise<RagQuery | null> {
+  const messages = await apiClient<Array<{
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    sources: { items?: RagSource[] } | null;
+    created_at: string;
+  }>>(`/rag/chats/${chat.id}/messages`);
+  const userMessage = [...messages].reverse().find((message) => message.role === "user");
+  const assistantMessage = [...messages].reverse().find((message) => message.role === "assistant");
+  if (!userMessage || !assistantMessage) return null;
+  return {
+    id: assistantMessage.id,
+    question: userMessage.content,
+    answer: assistantMessage.content,
+    sources: assistantMessage.sources?.items ?? [],
+    doc_ids: chat.document_ids,
+    created_at: assistantMessage.created_at,
+  };
+}
+
+function toRagQuery(chat: ChatResponse, response: RagGenerateResponse): RagQuery {
+  return {
+    id: response.assistant_message.id,
+    question: response.user_message.content,
+    answer: response.assistant_message.content,
+    sources: response.sources.map((source) => ({
+      chunk_id: source.chunk_id,
+      document_id: source.document_id,
+      document_title: "Documento fuente",
+      page: source.page_number ?? 0,
+      excerpt: source.preview,
+    })),
+    doc_ids: chat.document_ids,
+    created_at: response.assistant_message.created_at,
+  };
 }

@@ -53,10 +53,11 @@ export async function uploadNotebookSource(file: File) {
   const formData = new FormData();
   formData.append("file", file);
 
-  return apiClient<NotebookDocument>("/docs", {
+  const response = await apiClient<{ document: NotebookDocument }>("/docs/upload", {
     method: "POST",
     body: formData,
   });
+  return response.document;
 }
 
 export async function listNotebookMessages(notebookId: string) {

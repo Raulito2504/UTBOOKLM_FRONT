@@ -41,7 +41,8 @@ export function RagView() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    const timer = window.setTimeout(() => void loadData(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadData]);
 
   function toggleDoc(id: string) {

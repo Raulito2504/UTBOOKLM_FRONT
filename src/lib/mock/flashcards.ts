@@ -50,7 +50,7 @@ export const mockExams: ExamSummary[] = [
     title: "Examen — Matemáticas Discretas",
     doc_title: "Matemáticas Discretas — Cap. 4",
     question_count: 10,
-    types: ["mcq", "true_false"],
+    types: ["multiple_choice", "true_false"],
     created_at: "2026-06-25T16:00:00Z",
   },
   {
@@ -58,13 +58,13 @@ export const mockExams: ExamSummary[] = [
     title: "Examen — Normalización BD",
     doc_title: "Bases de Datos — Unidad 3",
     question_count: 8,
-    types: ["mcq", "open"],
+    types: ["multiple_choice", "open"],
     created_at: "2026-06-27T10:00:00Z",
   },
 ];
 
 let flashcardsStore = [...mockFlashcards];
-let examsStore = [...mockExams];
+const examsStore = [...mockExams];
 
 export function getMockFlashcards(): Flashcard[] {
   return [...flashcardsStore];
@@ -105,7 +105,7 @@ export function getMockExamDetail(id: string): ExamDetail | null {
     questions: [
       {
         id: "q1",
-        type: "mcq",
+        type: "multiple_choice",
         prompt: "¿Cuál es la complejidad de Dijkstra con cola de prioridad?",
         options: ["O(V²)", "O(E log V)", "O(V + E)", "O(E²)"],
         correct_answer: "O(E log V)",

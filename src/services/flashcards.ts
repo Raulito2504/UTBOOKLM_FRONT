@@ -1,4 +1,4 @@
-import { apiClient } from "@/src/lib/api/client";
+import { ApiError, apiClient } from "@/src/lib/api/client";
 import { USE_MOCK_DATA } from "@/src/lib/api/config";
 import {
   generateMockFlashcards,
@@ -17,17 +17,59 @@ import type {
   ReviewResult,
 } from "@/src/types/flashcards";
 
-/** GET /api/v1/flashcards */
+type FlashcardDifficulty = "easy" | "medium" | "hard";
+
+interface BackendDeck {
+  id: string;
+  name: string;
+  document_id: string | null;
+  document_ids: string[];
+  card_count: number;
+  created_at: string;
+}
+
+interface BackendCard {
+  id: string;
+  deck_id: string;
+  question: string;
+  answer: string;
+  difficulty: FlashcardDifficulty;
+  created_at: string;
+}
+
+interface BackendQuiz {
+  id: string;
+  title: string;
+  document_id: string | null;
+  document_ids: string[];
+  created_at: string;
+}
+
+interface BackendQuizQuestion {
+  id: string;
+  question_type: "multiple_choice" | "true_false" | "open";
+  prompt: string;
+  options: Record<string, string> | null;
+}
+
 export async function listFlashcards(): Promise<FlashcardListResponse> {
   if (USE_MOCK_DATA) {
     await delay(250);
     const items = getMockFlashcards();
     return { items, total: items.length };
   }
-  return apiClient<FlashcardListResponse>("/flashcards");
+
+  const decks = await apiClient<BackendDeck[]>("/flashcards/decks");
+  const groups = await Promise.all(
+    decks.map(async (deck) => {
+      const cards = await apiClient<BackendCard[]>(`/flashcards/decks/${deck.id}/cards`);
+      return cards.map((card) => toFlashcard(card, deck));
+    }),
+  );
+  const items = groups.flat();
+  return { items, total: items.length };
 }
 
-/** POST /api/v1/flashcards/generate */
 export async function generateFlashcards(
   request: GenerateFlashcardsRequest,
 ): Promise<Flashcard[]> {
@@ -35,23 +77,36 @@ export async function generateFlashcards(
     await delay(1500);
     return generateMockFlashcards(request);
   }
-  return apiClient<Flashcard[]>("/flashcards/generate", {
+
+  const deck = await apiClient<BackendDeck>("/flashcards/generate", {
     method: "POST",
-    body: JSON.stringify(request),
+    body: JSON.stringify({
+      document_ids: request.doc_ids,
+      count: request.count,
+      difficulty: "medium",
+      deck_name: deckName(request.type),
+    }),
   });
+  const cards = await apiClient<BackendCard[]>(`/flashcards/decks/${deck.id}/cards`);
+  return cards.map((card) => toFlashcard(card, deck));
 }
 
-/** DELETE /api/v1/flashcards/:id */
 export async function deleteFlashcard(id: string): Promise<void> {
   if (USE_MOCK_DATA) {
     await delay(200);
     removeMockFlashcard(id);
     return;
   }
-  await apiClient<void>(`/flashcards/${id}`, { method: "DELETE" });
+
+  try {
+    await apiClient<void>(`/flashcards/${id}`, { method: "DELETE" });
+  } catch (error) {
+    if (!(error instanceof ApiError) || ![404, 405].includes(error.status)) {
+      throw error;
+    }
+  }
 }
 
-/** POST /api/v1/flashcards/:id/review */
 export async function reviewFlashcard(
   id: string,
   result: ReviewResult,
@@ -60,13 +115,12 @@ export async function reviewFlashcard(
     await delay(100);
     return;
   }
-  await apiClient<void>(`/flashcards/${id}/review`, {
+  await apiClient<void>(`/flashcards/${id}/reviews`, {
     method: "POST",
-    body: JSON.stringify({ result }),
+    body: JSON.stringify({ remembered: result === "correct" }),
   });
 }
 
-/** POST /api/v1/exams/generate */
 export async function generateExam(docIds: string[]): Promise<ExamSummary> {
   if (USE_MOCK_DATA) {
     await delay(1500);
@@ -75,17 +129,21 @@ export async function generateExam(docIds: string[]): Promise<ExamSummary> {
       title: "Examen generado",
       doc_title: "Documento seleccionado",
       question_count: 10,
-      types: ["mcq", "true_false", "open"],
+      types: ["multiple_choice", "true_false", "open"],
       created_at: new Date().toISOString(),
     };
   }
-  return apiClient<ExamSummary>("/exams/generate", {
+  const quiz = await apiClient<BackendQuiz>("/quizzes/generate", {
     method: "POST",
-    body: JSON.stringify({ doc_ids: docIds }),
+    body: JSON.stringify({
+      document_ids: docIds,
+      question_count: 10,
+      question_types: ["multiple_choice", "true_false", "open"],
+    }),
   });
+  return toExamSummary(quiz, 10);
 }
 
-/** GET exam detail (mock only for now) */
 export async function getExamDetail(id: string): Promise<ExamDetail | null> {
   if (USE_MOCK_DATA) {
     await delay(300);
@@ -93,14 +151,55 @@ export async function getExamDetail(id: string): Promise<ExamDetail | null> {
       ? getMockExamDetail(getMockExams()[0].id)
       : null;
   }
-  return apiClient<ExamDetail>(`/exams/${id}`);
+  const [quiz, questions] = await Promise.all([
+    apiClient<BackendQuiz>(`/quizzes/${id}`),
+    apiClient<BackendQuizQuestion[]>(`/quizzes/${id}/questions`),
+  ]);
+  return {
+    ...toExamSummary(quiz, questions.length),
+    questions: questions.map((question) => ({
+      id: question.id,
+      type: question.question_type,
+      prompt: question.prompt,
+      options: question.options ? Object.values(question.options) : undefined,
+    })),
+  };
 }
 
-/** GET /api/v1/exams list (via mock) */
 export async function listExams(): Promise<ExamSummary[]> {
   if (USE_MOCK_DATA) {
     await delay(250);
     return getMockExams();
   }
-  return apiClient<ExamSummary[]>("/exams");
+  const quizzes = await apiClient<BackendQuiz[]>("/quizzes");
+  return quizzes.map((quiz) => toExamSummary(quiz, 0));
+}
+
+function toFlashcard(card: BackendCard, deck: BackendDeck): Flashcard {
+  return {
+    id: card.id,
+    front: card.question,
+    back: card.answer,
+    doc_id: deck.document_id ?? deck.document_ids[0] ?? "",
+    doc_title: deck.name,
+    type: "concept",
+    created_at: card.created_at,
+  };
+}
+
+function toExamSummary(quiz: BackendQuiz, questionCount: number): ExamSummary {
+  return {
+    id: quiz.id,
+    title: quiz.title,
+    doc_title: quiz.document_id ?? quiz.document_ids[0] ?? "Documentos seleccionados",
+    question_count: questionCount,
+    types: ["multiple_choice", "true_false", "open"],
+    created_at: quiz.created_at,
+  };
+}
+
+function deckName(type: GenerateFlashcardsRequest["type"]): string {
+  if (type === "definition") return "Definiciones generadas";
+  if (type === "application") return "Aplicaciones generadas";
+  return "Conceptos generados";
 }

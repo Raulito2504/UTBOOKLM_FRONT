@@ -1,6 +1,6 @@
 export type FlashcardType = "definition" | "concept" | "application";
 export type ReviewResult = "correct" | "incorrect" | "skip";
-export type ExamQuestionType = "mcq" | "true_false" | "open";
+export type ExamQuestionType = "multiple_choice" | "true_false" | "open";
 
 export interface Flashcard {
   id: string;

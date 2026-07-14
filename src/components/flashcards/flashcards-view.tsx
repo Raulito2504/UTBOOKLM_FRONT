@@ -65,7 +65,8 @@ export function FlashcardsView() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    const timer = window.setTimeout(() => void loadData(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadData]);
 
   async function handleGenerate(e: FormEvent) {
