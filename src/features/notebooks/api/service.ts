@@ -36,19 +36,6 @@ export async function updateNotebookSources(
   });
 }
 
-export async function listNotebookSources(notebookId: string) {
-  return apiClient<NotebookDocument[]>(`/notebooks/${notebookId}/sources`);
-}
-
-export async function removeNotebookSource(
-  notebookId: string,
-  documentId: string,
-) {
-  await apiClient<void>(`/notebooks/${notebookId}/sources/${documentId}`, {
-    method: "DELETE",
-  });
-}
-
 export async function uploadNotebookSource(file: File) {
   const formData = new FormData();
   formData.append("file", file);

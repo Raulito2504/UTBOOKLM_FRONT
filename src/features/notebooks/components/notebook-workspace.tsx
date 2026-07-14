@@ -6,14 +6,12 @@ import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/src/features/auth/auth-context";
 import {
   getNotebook,
-  listNotebookSources,
   listNotebookMessages,
-  removeNotebookSource,
   sendNotebookMessage,
   updateNotebookSources,
   uploadNotebookSource,
 } from "../api/service";
-import type { ChatMessage, ChatNotebook, NotebookDocument } from "../types";
+import type { ChatMessage, ChatNotebook } from "../types";
 
 type Status = "idle" | "loading" | "success" | "error";
 
@@ -29,13 +27,11 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
   const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [notebook, setNotebook] = useState<ChatNotebook | null>(null);
-  const [sources, setSources] = useState<NotebookDocument[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<Status>("idle");
   const [prompt, setPrompt] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isUploadingSource, setIsUploadingSource] = useState(false);
-  const [removingSourceId, setRemovingSourceId] = useState<string | null>(null);
   const [isSourceDragOver, setIsSourceDragOver] = useState(false);
   const [error, setError] = useState("");
   const [sourceError, setSourceError] = useState("");
@@ -50,9 +46,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
         getNotebook(notebookId),
         listNotebookMessages(notebookId),
       ]);
-      const currentSources = await listNotebookSources(notebookId);
       setNotebook(currentNotebook);
-      setSources(currentSources);
       setMessages(currentMessages);
       setStatus("success");
     } catch {
@@ -65,7 +59,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
     return () => window.clearTimeout(timer);
   }, [loadNotebook]);
 
-  const sourceCount = sources.length;
+  const sourceCount = notebook?.document_ids.length ?? 0;
 
   async function uploadSources(files: FileList | null) {
     if (!files?.length || isUploadingSource) return;
@@ -79,38 +73,13 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
         documentIds.push(document.id);
       }
       const updatedNotebook = await updateNotebookSources(notebookId, documentIds);
-      const updatedSources = await listNotebookSources(notebookId);
       setNotebook(updatedNotebook);
-      setSources(updatedSources);
       setIsSourceDialogOpen(false);
     } catch {
       setSourceError("No fue posible subir o asociar esas fuentes.");
     } finally {
       setIsUploadingSource(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }
-
-  async function removeSource(documentId: string) {
-    if (removingSourceId) return;
-
-    setRemovingSourceId(documentId);
-    setSourceError("");
-    try {
-      await removeNotebookSource(notebookId, documentId);
-      setSources((current) => current.filter((source) => source.id !== documentId));
-      setNotebook((current) =>
-        current
-          ? {
-              ...current,
-              document_ids: current.document_ids.filter((id) => id !== documentId),
-            }
-          : current,
-      );
-    } catch {
-      setSourceError("No fue posible quitar esa fuente.");
-    } finally {
-      setRemovingSourceId(null);
     }
   }
 
@@ -209,61 +178,21 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
               + Anadir fuentes
             </button>
 
-            {sourceError ? (
-              <p className="mt-4 rounded-lg border border-red-300/25 bg-red-400/10 px-3 py-2 text-xs text-red-200">
-                {sourceError}
-              </p>
-            ) : null}
-
-            <div className="min-h-[420px]">
+            <div className="grid min-h-[420px] place-items-center text-center">
               {sourceCount > 0 ? (
-                <div className="mt-5 space-y-3">
-                  {sources.map((source) => (
-                    <div
-                      key={source.id}
-                      className="rounded-lg border border-white/10 bg-white/[0.03] p-3"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-white/85">
-                            {source.title || "Fuente sin titulo"}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-white/45">
-                            {source.original_filename || source.mime_type || source.id}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void removeSource(source.id)}
-                          disabled={removingSourceId === source.id}
-                          className="shrink-0 rounded-full border border-white/12 px-2.5 py-1 text-xs font-semibold text-white/70 transition-colors hover:bg-white/10 disabled:opacity-45"
-                        >
-                          {removingSourceId === source.id ? "..." : "Quitar"}
-                        </button>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-white/45">
-                        <span className="rounded-full bg-white/[0.06] px-2 py-1">
-                          {source.mime_type?.includes("presentation")
-                            ? "PPTX"
-                            : source.mime_type?.includes("markdown")
-                              ? "MD"
-                              : source.mime_type?.includes("text")
-                                ? "TXT"
-                                : "PDF"}
-                        </span>
-                        <span className="rounded-full bg-white/[0.06] px-2 py-1">
-                          {source.page_count} paginas
-                        </span>
-                        <span className="rounded-full bg-white/[0.06] px-2 py-1">
-                          {source.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="max-w-[240px] text-sm text-white/55">
+                  <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-white/55">
+                    {sourceCount}
+                  </div>
+                  <p className="font-semibold text-white/70">
+                    {sourceCount} fuentes conectadas
+                  </p>
+                  <p className="mt-2 text-xs leading-5">
+                    Ya puedes preguntarle al cuaderno sobre esos documentos.
+                  </p>
                 </div>
               ) : (
-                <div className="grid min-h-[420px] place-items-center text-center">
-                  <div className="max-w-[240px] text-sm text-white/42">
+                <div className="max-w-[240px] text-sm text-white/42">
                   <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-white/35">
                     +
                   </div>
@@ -271,9 +200,8 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
                     Aun no hay fuentes
                   </p>
                   <p className="mt-2 text-xs leading-5">
-                    Anade PDF, PPTX, Markdown o texto para alimentar este cuaderno.
+                    Anade PDFs o presentaciones para alimentar este cuaderno.
                   </p>
-                  </div>
                 </div>
               )}
             </div>
@@ -292,7 +220,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
                       Anade fuentes para empezar
                     </h2>
                     <p className="mt-2 max-w-md text-sm text-white/55">
-                      Sube una fuente y despues pregunta sobre ese contenido.
+                      Sube un PDF o PPTX y despues pregunta sobre ese contenido.
                     </p>
                     <button
                       type="button"
@@ -363,7 +291,7 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
                   <div>
                     <h2 className="text-xl font-semibold">Anadir fuentes</h2>
                     <p className="mt-1 text-sm text-white/50">
-                      El backend acepta PDF, PPTX, Markdown y texto plano.
+                      Por ahora el backend acepta PDF y PPTX.
                     </p>
                   </div>
                   <button
@@ -396,14 +324,14 @@ export function NotebookWorkspace({ notebookId }: { notebookId: string }) {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf,.pptx,.md,.txt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain"
+                    accept=".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                     multiple
                     className="hidden"
                     onChange={(event) => void uploadSources(event.target.files)}
                   />
                   <h3 className="font-semibold">Suelta tus archivos aqui</h3>
                   <p className="mt-2 text-sm text-white/50">
-                    PDF, PPTX, MD y TXT compatibles con el backend actual
+                    PDF y PPTX compatibles con el backend actual
                   </p>
                   {sourceError ? (
                     <p className="mt-4 text-sm text-red-300">{sourceError}</p>

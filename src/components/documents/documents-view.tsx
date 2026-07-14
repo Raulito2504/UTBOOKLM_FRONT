@@ -68,7 +68,7 @@ export function DocumentsView() {
     <div>
       <PageHeader
         title="Documentos"
-        description="Sube PDF, PPTX, Markdown o texto plano. El motor RAG los indexará automáticamente en ChromaDB."
+        description="Sube PDFs y presentaciones PPTX. El motor RAG los indexará automáticamente en ChromaDB."
       />
 
       <div
@@ -91,7 +91,7 @@ export function DocumentsView() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.pptx,.md,.txt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain"
+          accept=".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation"
           multiple
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
@@ -103,7 +103,7 @@ export function DocumentsView() {
           Arrastra archivos aquí o selecciona desde tu equipo
         </p>
         <p className="mt-1 text-xs text-muted">
-          PDF, PPTX, MD y TXT · máximo 50 MB por archivo
+          PDF y PPTX · máximo 50 MB por archivo
         </p>
         <Button
           variant="secondary"
