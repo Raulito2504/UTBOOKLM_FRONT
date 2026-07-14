@@ -14,13 +14,13 @@ import type { Document, DocumentStatus } from "@/src/types/documents";
 const statusLabels: Record<DocumentStatus, string> = {
   ready: "Indexado",
   processing: "Procesando",
-  failed: "Error",
+  error: "Error",
 };
 
 const statusVariants: Record<DocumentStatus, "success" | "warning" | "error"> = {
   ready: "success",
   processing: "warning",
-  failed: "error",
+  error: "error",
 };
 
 export function DocumentsView() {
@@ -41,8 +41,7 @@ export function DocumentsView() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void loadDocuments(), 0);
-    return () => window.clearTimeout(timer);
+    loadDocuments();
   }, [loadDocuments]);
 
   async function handleFiles(files: FileList | null) {
@@ -68,7 +67,7 @@ export function DocumentsView() {
     <div>
       <PageHeader
         title="Documentos"
-        description="Sube PDF, PPTX, Markdown o texto plano. El motor RAG los indexará automáticamente en ChromaDB."
+        description="Sube PDFs y presentaciones PPTX. El motor RAG los indexará automáticamente en ChromaDB."
       />
 
       <div
@@ -91,7 +90,7 @@ export function DocumentsView() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.pptx,.md,.txt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain"
+          accept=".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation"
           multiple
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
@@ -103,7 +102,7 @@ export function DocumentsView() {
           Arrastra archivos aquí o selecciona desde tu equipo
         </p>
         <p className="mt-1 text-xs text-muted">
-          PDF, PPTX, MD y TXT · máximo 50 MB por archivo
+          PDF y PPTX · máximo 50 MB por archivo
         </p>
         <Button
           variant="secondary"
@@ -137,15 +136,15 @@ export function DocumentsView() {
             >
               <div className="flex min-w-0 items-start gap-3">
                 <span className="text-2xl" aria-hidden>
-                  {doc.mime_type?.includes("presentation") ? "P" : "D"}
+                  {doc.mime_type.includes("presentation") ? "📊" : "📕"}
                 </span>
                 <div className="min-w-0">
                   <p className="truncate font-medium text-foreground">
                     {doc.title}
                   </p>
                   <p className="text-xs text-muted">
-                    {doc.original_filename ?? doc.title} - {formatBytes(doc.file_size_bytes)}
-                    {doc.page_count ? ` - ${doc.page_count} pags.` : ""}
+                    {doc.file_name} · {formatBytes(doc.file_size_bytes)}
+                    {doc.page_count ? ` · ${doc.page_count} págs.` : ""}
                   </p>
                   <p className="text-xs text-muted">
                     Subido {formatDate(doc.created_at)}
@@ -186,5 +185,3 @@ function formatDate(iso: string): string {
     year: "numeric",
   });
 }
-
-
