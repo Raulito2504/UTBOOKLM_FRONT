@@ -1,16 +1,15 @@
-export type DocumentStatus = "processing" | "ready" | "failed";
+export type DocumentStatus = "processing" | "ready" | "error";
 
 export interface Document {
   id: string;
   title: string;
-  file_path: string;
-  original_filename: string | null;
-  mime_type: string | null;
-  storage_backend: string;
+  file_name: string;
+  mime_type: string;
   file_size_bytes: number;
   status: DocumentStatus;
-  page_count: number;
+  page_count: number | null;
   created_at: string;
+  updated_at: string;
 }
 
 export interface DocumentListResponse {

@@ -32,7 +32,7 @@ export function LoginForm() {
     setIsSubmitting(true); setError("");
     try {
       await login({ email, password }, form.get("remember") === "on");
-      router.replace("/notebooks");
+      router.replace("/dashboard");
     } catch (cause) {
       setError(cause instanceof ApiError ? loginErrors[cause.errorCode] ?? "No fue posible iniciar sesión. Intenta de nuevo." : "No fue posible iniciar sesión. Intenta de nuevo.");
     }

@@ -22,15 +22,12 @@ export async function listDocuments(
     const items = getMockDocuments();
     return { items, total: items.length, page, page_size: pageSize };
   }
-
-  const offset = (page - 1) * pageSize;
-  const items = await apiClient<Document[]>(
-    `/docs?limit=${pageSize}&offset=${offset}`,
+  return apiClient<DocumentListResponse>(
+    `/docs?page=${page}&page_size=${pageSize}`,
   );
-  return { items, total: items.length, page, page_size: pageSize };
 }
 
-/** POST /api/v1/docs */
+/** POST /api/v1/docs/upload */
 export async function uploadDocument(
   file: File,
 ): Promise<UploadDocumentResponse> {
@@ -46,16 +43,10 @@ export async function uploadDocument(
 
   const formData = new FormData();
   formData.append("file", file);
-  const document = await apiClient<Document>("/docs", {
+  return apiClient<UploadDocumentResponse>("/docs/upload", {
     method: "POST",
     body: formData,
   });
-
-  return {
-    id: document.id,
-    status: document.status,
-    message: "Documento listo para usarse",
-  };
 }
 
 /** DELETE /api/v1/docs/:doc_id */

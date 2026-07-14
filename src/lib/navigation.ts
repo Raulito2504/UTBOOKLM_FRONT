@@ -5,11 +5,11 @@ export interface NavItem {
 }
 
 export const mainNavItems: NavItem[] = [
-  { label: "Mis cuadernos", href: "/notebooks", icon: "N" },
-  { label: "Documentos", href: "/documents", icon: "F" },
-  { label: "Consulta RAG", href: "/rag", icon: "R" },
-  { label: "Flashcards", href: "/flashcards", icon: "C" },
-  { label: "Rachas", href: "/streaks", icon: "S" },
-  { label: "Salas", href: "/rooms", icon: "G" },
-  { label: "Web Tour", href: "/webtour", icon: "W" },
+  { label: "Dashboard", href: "/dashboard", icon: "◫" },
+  { label: "Documentos", href: "/documents", icon: "▤" },
+  { label: "Consulta RAG", href: "/rag", icon: "◉" },
+  { label: "Flashcards", href: "/flashcards", icon: "▢" },
+  { label: "Rachas", href: "/streaks", icon: "▲" },
+  { label: "Salas", href: "/rooms", icon: "⬡" },
+  { label: "Web Tour", href: "/webtour", icon: "◎" },
 ];
