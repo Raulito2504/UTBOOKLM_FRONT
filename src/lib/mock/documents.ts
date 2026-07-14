@@ -11,7 +11,6 @@ export const mockDocuments: Document[] = [
     file_size_bytes: 2_450_000,
     status: "ready",
     page_count: 48,
-    chunk_count: 92,
     created_at: "2026-06-10T14:00:00Z",
   },
   {
@@ -24,7 +23,6 @@ export const mockDocuments: Document[] = [
     file_size_bytes: 1_820_000,
     status: "ready",
     page_count: 32,
-    chunk_count: 64,
     created_at: "2026-06-15T09:30:00Z",
   },
   {
@@ -38,7 +36,6 @@ export const mockDocuments: Document[] = [
     file_size_bytes: 3_100_000,
     status: "ready",
     page_count: 24,
-    chunk_count: 31,
     created_at: "2026-06-20T16:00:00Z",
   },
   {
@@ -51,7 +48,6 @@ export const mockDocuments: Document[] = [
     file_size_bytes: 980_000,
     status: "processing",
     page_count: 0,
-    chunk_count: 0,
     created_at: "2026-06-29T08:00:00Z",
   },
 ];
@@ -73,7 +69,6 @@ export function addMockDocument(file: File): Document {
     file_size_bytes: file.size,
     status: "processing",
     page_count: 0,
-    chunk_count: 0,
     created_at: new Date().toISOString(),
   };
   documentsStore = [doc, ...documentsStore];
