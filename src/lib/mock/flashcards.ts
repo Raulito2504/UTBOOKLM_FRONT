@@ -64,7 +64,7 @@ export const mockExams: ExamSummary[] = [
 ];
 
 let flashcardsStore = [...mockFlashcards];
-let examsStore = [...mockExams];
+const examsStore = [...mockExams];
 
 export function getMockFlashcards(): Flashcard[] {
   return [...flashcardsStore];

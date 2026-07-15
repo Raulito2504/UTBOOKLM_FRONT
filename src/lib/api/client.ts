@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/src/lib/api/config";
+import { getAccessToken } from "@/src/features/auth/session";
 
 export class ApiError extends Error {
   constructor(
@@ -16,11 +17,6 @@ interface ApiErrorBody {
   error_code?: string;
   message?: string;
   detail?: unknown;
-}
-
-function getAccessToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("access_token");
 }
 
 export async function apiClient<T>(

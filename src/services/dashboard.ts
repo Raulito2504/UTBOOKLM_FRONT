@@ -17,7 +17,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   }
 
   const [user, streak, calendar] = await Promise.all([
-    apiClient<UserProfile>("/auth/me"),
+    apiClient<UserProfile>("/users/me"),
     getStreakSummary(),
     getStreakCalendar(),
   ]);
@@ -28,4 +28,3 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   return { user, streak, calendar, ...dashboard };
 }
-

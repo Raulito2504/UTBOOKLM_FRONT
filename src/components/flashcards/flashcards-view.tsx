@@ -5,7 +5,7 @@ import { PageHeader } from "@/src/components/ui/page-header";
 import { Badge } from "@/src/components/ui/badge";
 import { Button } from "@/src/components/ui/button";
 import {
-  deleteFlashcard,
+  generateExam,
   generateFlashcards,
   listExams,
   listFlashcards,
@@ -32,6 +32,7 @@ export function FlashcardsView() {
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generatingExam, setGeneratingExam] = useState(false);
 
   const [selectedDoc, setSelectedDoc] = useState("");
   const [cardType, setCardType] = useState<FlashcardType>("concept");
@@ -65,7 +66,8 @@ export function FlashcardsView() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    const timer = window.setTimeout(() => void loadData(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadData]);
 
   async function handleGenerate(e: FormEvent) {
@@ -99,9 +101,15 @@ export function FlashcardsView() {
     }
   }
 
-  async function handleDelete(id: string) {
-    await deleteFlashcard(id);
-    setFlashcards((prev) => prev.filter((f) => f.id !== id));
+  async function handleGenerateExam() {
+    if (!selectedDoc || generatingExam) return;
+    setGeneratingExam(true);
+    try {
+      const exam = await generateExam([selectedDoc]);
+      setExams((previous) => [exam, ...previous]);
+    } finally {
+      setGeneratingExam(false);
+    }
   }
 
   const currentCard = flashcards[reviewIndex];
@@ -119,6 +127,10 @@ export function FlashcardsView() {
           tab === "flashcards" && flashcards.length > 0 ? (
             <Button onClick={() => { setReviewMode(true); setReviewIndex(0); setFlipped(false); }}>
               Iniciar repaso
+            </Button>
+          ) : tab === "exams" ? (
+            <Button onClick={handleGenerateExam} disabled={!selectedDoc || generatingExam}>
+              {generatingExam ? "Generando..." : "Generar examen"}
             </Button>
           ) : undefined
         }
@@ -268,13 +280,6 @@ export function FlashcardsView() {
                           {card.doc_title}
                         </p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        className="shrink-0 text-error"
-                        onClick={() => handleDelete(card.id)}
-                      >
-                        ✕
-                      </Button>
                     </div>
                   </li>
                 ))}
@@ -287,8 +292,8 @@ export function FlashcardsView() {
           {exams.length === 0 ? (
             <div className="rounded-xl border border-border bg-card p-8 text-center">
               <p className="text-sm text-muted">
-                No hay exámenes generados. Esta función estará disponible cuando
-                el endpoint POST /exams/generate esté conectado.
+                No hay exámenes generados. Selecciona un documento y genera el
+                primero con IA.
               </p>
             </div>
           ) : (

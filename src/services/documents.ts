@@ -12,6 +12,32 @@ import type {
   UploadDocumentResponse,
 } from "@/src/types/documents";
 
+interface ApiDocument {
+  id: string;
+  title: string;
+  original_filename: string | null;
+  mime_type: string | null;
+  file_size_bytes: number;
+  status: "processing" | "ready" | "failed";
+  page_count: number | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+function toDocument(document: ApiDocument): Document {
+  return {
+    id: document.id,
+    title: document.title,
+    file_name: document.original_filename ?? document.title,
+    mime_type: document.mime_type ?? "application/octet-stream",
+    file_size_bytes: document.file_size_bytes,
+    status: document.status === "failed" ? "error" : document.status,
+    page_count: document.page_count,
+    created_at: document.created_at,
+    updated_at: document.updated_at ?? document.created_at,
+  };
+}
+
 /** GET /api/v1/docs */
 export async function listDocuments(
   page = 1,
@@ -22,12 +48,12 @@ export async function listDocuments(
     const items = getMockDocuments();
     return { items, total: items.length, page, page_size: pageSize };
   }
-  return apiClient<DocumentListResponse>(
-    `/docs?page=${page}&page_size=${pageSize}`,
-  );
+  const offset = (page - 1) * pageSize;
+  const items = await apiClient<ApiDocument[]>(`/docs?limit=${pageSize}&offset=${offset}`);
+  return { items: items.map(toDocument), total: items.length, page, page_size: pageSize };
 }
 
-/** POST /api/v1/docs/upload */
+/** POST /api/v1/docs */
 export async function uploadDocument(
   file: File,
 ): Promise<UploadDocumentResponse> {
@@ -43,10 +69,15 @@ export async function uploadDocument(
 
   const formData = new FormData();
   formData.append("file", file);
-  return apiClient<UploadDocumentResponse>("/docs/upload", {
+  const document = await apiClient<ApiDocument>("/docs", {
     method: "POST",
     body: formData,
   });
+  return {
+    id: document.id,
+    status: document.status === "failed" ? "error" : document.status,
+    message: "Documento listo para usarse",
+  };
 }
 
 /** DELETE /api/v1/docs/:doc_id */
@@ -67,5 +98,5 @@ export async function getDocument(id: string): Promise<Document> {
     if (!doc) throw new Error("Documento no encontrado");
     return doc;
   }
-  return apiClient<Document>(`/docs/${id}`);
+  return toDocument(await apiClient<ApiDocument>(`/docs/${id}`));
 }

@@ -41,7 +41,8 @@ export function DocumentsView() {
   }, []);
 
   useEffect(() => {
-    loadDocuments();
+    const timer = window.setTimeout(() => void loadDocuments(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadDocuments]);
 
   async function handleFiles(files: FileList | null) {
