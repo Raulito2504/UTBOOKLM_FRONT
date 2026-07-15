@@ -9,5 +9,10 @@ export const listNotebookSources = (notebookId: string) => apiClient<NotebookDoc
 export const removeNotebookSource = (notebookId: string, documentId: string) => apiClient<void>(`/notebooks/${notebookId}/sources/${documentId}`, { method: "DELETE" });
 export const listNotebookMessages = (notebookId: string) => apiClient<ChatMessage[]>(`/notebooks/${notebookId}/messages`);
 export const sendNotebookMessage = (notebookId: string, content: string) => apiClient<RagGenerateResponse>(`/notebooks/${notebookId}/messages`, { method: "POST", body: JSON.stringify({ content }) });
-export async function uploadNotebookSource(file: File) { const body = new FormData(); body.append("file", file); return apiClient<NotebookDocument>("/docs", { method: "POST", body }); }
+export async function uploadNotebookSource(file: File) {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await apiClient<{ document: NotebookDocument }>("/docs/upload", { method: "POST", body });
+  return response.document;
+}
 export const deleteNotebook = (notebookId: string) => apiClient<void>(`/notebooks/${notebookId}`, { method: "DELETE" });

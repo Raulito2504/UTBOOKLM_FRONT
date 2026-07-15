@@ -22,6 +22,7 @@ const roleLabels: Record<NonNullable<StudyRoom["role"]>, string> = {
 export function RoomsView() {
   const [rooms, setRooms] = useState<StudyRoom[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState<"all" | "mine" | "public">("all");
@@ -35,6 +36,9 @@ export function RoomsView() {
     try {
       const response = await listRooms();
       setRooms(response.items);
+      setError(null);
+    } catch {
+      setError("Las salas colaborativas aún no están disponibles en el backend.");
     } finally {
       setLoading(false);
     }
@@ -165,6 +169,10 @@ export function RoomsView() {
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-40 animate-pulse rounded-xl bg-slate-200" />
           ))}
+        </div>
+      ) : error ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center">
+          <p className="text-sm text-amber-800">{error}</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-8 text-center">

@@ -4,6 +4,6 @@ export interface UserProfile {
   name: string;
   avatar_url: string | null;
   org_id: string | null;
-  role: "owner" | "admin" | "member";
+  role: "owner" | "admin" | "member" | "teacher" | "student";
   created_at: string;
 }

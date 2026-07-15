@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "@/src/lib/api/config";
-import { getAccessToken } from "@/src/features/auth/session";
+import { getAccessToken, getRefreshToken, updateAccessToken } from "@/src/features/auth/session";
 
 export class ApiError extends Error {
   constructor(
@@ -34,10 +34,27 @@ export async function apiClient<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  let response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers,
   });
+
+  if (response.status === 401 && path !== "/auth/refresh") {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (refreshResponse.ok) {
+        const session = await refreshResponse.json() as { access_token: string };
+        updateAccessToken(session.access_token);
+        headers.set("Authorization", `Bearer ${session.access_token}`);
+        response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+      }
+    }
+  }
 
   if (!response.ok) {
     let body: ApiErrorBody = {};

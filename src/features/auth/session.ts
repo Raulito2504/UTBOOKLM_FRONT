@@ -40,6 +40,11 @@ export function saveUser(user: User) {
   activeStorage().setItem(USER, JSON.stringify(user));
 }
 
+export function updateAccessToken(token: string) {
+  if (typeof window === "undefined") return;
+  activeStorage().setItem(ACCESS_TOKEN, token);
+}
+
 export function clearSession(notify = true) {
   if (typeof window === "undefined") return;
   for (const storage of [localStorage, sessionStorage]) {

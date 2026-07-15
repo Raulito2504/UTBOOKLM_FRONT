@@ -15,13 +15,15 @@ import type {
 interface ApiDocument {
   id: string;
   title: string;
+  file_path: string;
   original_filename: string | null;
   mime_type: string | null;
+  storage_backend: string;
   file_size_bytes: number;
   status: "processing" | "ready" | "failed";
-  page_count: number | null;
+  page_count: number;
+  chunk_count?: number | null;
   created_at: string;
-  updated_at?: string;
 }
 
 function toDocument(document: ApiDocument): Document {
@@ -34,7 +36,7 @@ function toDocument(document: ApiDocument): Document {
     status: document.status === "failed" ? "error" : document.status,
     page_count: document.page_count,
     created_at: document.created_at,
-    updated_at: document.updated_at ?? document.created_at,
+    updated_at: document.created_at,
   };
 }
 
@@ -49,11 +51,13 @@ export async function listDocuments(
     return { items, total: items.length, page, page_size: pageSize };
   }
   const offset = (page - 1) * pageSize;
-  const items = await apiClient<ApiDocument[]>(`/docs?limit=${pageSize}&offset=${offset}`);
-  return { items: items.map(toDocument), total: items.length, page, page_size: pageSize };
+  const response = await apiClient<{ items: ApiDocument[]; total: number }>(
+    `/docs/?limit=${pageSize}&offset=${offset}`,
+  );
+  return { items: response.items.map(toDocument), total: response.total, page, page_size: pageSize };
 }
 
-/** POST /api/v1/docs */
+/** POST /api/v1/docs/upload */
 export async function uploadDocument(
   file: File,
 ): Promise<UploadDocumentResponse> {
@@ -69,14 +73,14 @@ export async function uploadDocument(
 
   const formData = new FormData();
   formData.append("file", file);
-  const document = await apiClient<ApiDocument>("/docs", {
+  const response = await apiClient<{ document: ApiDocument; ingestion_job: { status: string } }>("/docs/upload", {
     method: "POST",
     body: formData,
   });
   return {
-    id: document.id,
-    status: document.status === "failed" ? "error" : document.status,
-    message: "Documento listo para usarse",
+    id: response.document.id,
+    status: response.document.status === "failed" ? "error" : response.document.status,
+    message: `Documento ${response.ingestion_job.status}`,
   };
 }
 
@@ -98,5 +102,6 @@ export async function getDocument(id: string): Promise<Document> {
     if (!doc) throw new Error("Documento no encontrado");
     return doc;
   }
-  return toDocument(await apiClient<ApiDocument>(`/docs/${id}`));
+  const response = await apiClient<{ document: ApiDocument }>(`/docs/${id}`);
+  return toDocument(response.document);
 }
